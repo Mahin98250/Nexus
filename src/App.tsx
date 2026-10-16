@@ -4,15 +4,31 @@ import {
   Hand, Layers3, Maximize2, Monitor, Move3D, Play, ScanLine,
   Settings2, ShieldCheck, Sparkles, Target, X,
 } from 'lucide-react';
-import { FilesetResolver, HandLandmarker, PoseLandmarker } from '@mediapipe/tasks-vision';
+import type { GestureRecognizer, HandLandmarker, PoseLandmarker } from '@mediapipe/tasks-vision';
 import ShadowStrikeGame from './components/ShadowStrikeGame';
 import AirOSDesktop from './components/AirOSDesktop';
 import RealityScanOverlay from './components/RealityScanOverlay';
 import HoloDeskScene from './components/HoloDeskScene';
 import { deriveHandInput } from './vision/gestures';
 import { deriveBodyInput } from './vision/bodyGestures';
+import { AirHandGestureStabilizer, type AirHandGesture } from './vision/airHandEngine';
 import { getRuntimeErrorDetails } from './vision/runtimeErrors';
-import { EMPTY_BODY_INPUT, EMPTY_HAND_INPUT, type BodyInput, type HandInput } from './vision/types';
+import { EMPTY_BODY_INPUT, EMPTY_HAND_INPUT, type BodyInput, type HandInput, type Landmark } from './vision/types';
+
+function getAirHandFrameGuidance(landmarks: readonly Landmark[] | undefined): string {
+  if (!landmarks || landmarks.length < 21) return '';
+  const xs = landmarks.map((point) => point.x);
+  const ys = landmarks.map((point) => point.y);
+  const left = Math.min(...xs), right = Math.max(...xs);
+  const top = Math.min(...ys), bottom = Math.max(...ys);
+  if (left < 0.055 || right > 0.945 || top < 0.055 || bottom > 0.945) {
+    return 'Hand near frame edge · move it toward the center';
+  }
+  const spanX = right - left, spanY = bottom - top;
+  if (spanX > 0.78 || spanY > 0.82) return 'Hand too close · move it a little farther away';
+  if (spanX < 0.16 && spanY < 0.20) return 'Hand looks small · move it a little closer';
+  return '';
+}
 
 type ExperienceId = 'holodesk' | 'shadowstrike' | 'airos' | 'realityscan';
 type Experience = {
@@ -54,9 +70,15 @@ const experiences: Experience[] = [
   },
 ];
 
+// Keep the JavaScript runtime and WASM assets pinned to the exact release used by AirHand.
+const mediaPipeRuntimeVersion = '0.10.22-rc.20250304';
+const mediaPipeBundleCandidates = [
+  `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${mediaPipeRuntimeVersion}/vision_bundle.mjs`,
+  `https://unpkg.com/@mediapipe/tasks-vision@${mediaPipeRuntimeVersion}/vision_bundle.mjs`,
+];
 const visionWasmCandidates = [
-  'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/wasm',
-  'https://unpkg.com/@mediapipe/tasks-vision@0.10.22/wasm',
+  `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${mediaPipeRuntimeVersion}/wasm`,
+  `https://unpkg.com/@mediapipe/tasks-vision@${mediaPipeRuntimeVersion}/wasm`,
 ];
 // Some mobile networks can load the camera but block or interrupt Google Cloud Storage.
 // Keep a second model mirror so camera permission success is not mistaken for model success.
@@ -64,6 +86,10 @@ const handModelCandidates = [
   'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task',
   'https://github.com/sanderdesnaijer/mediapipe-model-mirrors/releases/download/v1/hand_landmarker.task',
 ];
+const gestureModelCandidates = [
+  'https://storage.googleapis.com/mediapipe-models/gesture_recognizer/gesture_recognizer/float16/1/gesture_recognizer.task',
+];
+
 const poseModelCandidates = [
   'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task',
 ];
@@ -79,7 +105,12 @@ export default function App() {
   const handInputRef = useRef<HandInput>({ ...EMPTY_HAND_INPUT });
   const bodyInputRef = useRef<BodyInput>({ ...EMPTY_BODY_INPUT });
   const videoRef = useRef<HTMLVideoElement>(null);
+  const gestureRecognizerRef = useRef<GestureRecognizer | null>(null);
+  const gestureStabilizerRef = useRef(new AirHandGestureStabilizer(110));
   const landmarkerRef = useRef<HandLandmarker | null>(null);
+  const lastHandCountRef = useRef(-1);
+  const latestHandLandmarksRef = useRef<readonly Landmark[] | undefined>(undefined);
+  const lastVideoTimeRef = useRef(-1);
   const poseLandmarkerRef = useRef<PoseLandmarker | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const frameRef = useRef<number | null>(null);
@@ -96,8 +127,14 @@ export default function App() {
     setCameraStarting(false);
     if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
     frameRef.current = null;
+    gestureRecognizerRef.current?.close();
+    gestureRecognizerRef.current = null;
+    gestureStabilizerRef.current.reset();
     landmarkerRef.current?.close();
     landmarkerRef.current = null;
+    lastHandCountRef.current = -1;
+    latestHandLandmarksRef.current = undefined;
+    lastVideoTimeRef.current = -1;
     poseLandmarkerRef.current?.close();
     poseLandmarkerRef.current = null;
     bodyInputRef.current = { ...EMPTY_BODY_INPUT };
@@ -230,6 +267,22 @@ export default function App() {
       }
 
       setCameraStatus(active === 'shadowstrike' ? 'Loading pose-tracking model…' : 'Loading hand-tracking model…');
+      let mediaPipeModule: typeof import('@mediapipe/tasks-vision') | null = null;
+      let bundleError: unknown = null;
+      for (const bundleUrl of mediaPipeBundleCandidates) {
+        try {
+          // @vite-ignore keeps this exact versioned browser bundle external, like AirHand.
+          mediaPipeModule = await import(/* @vite-ignore */ bundleUrl) as typeof import('@mediapipe/tasks-vision');
+          break;
+        } catch (error) {
+          bundleError = error;
+        }
+      }
+      if (!mediaPipeModule) {
+        const details = getRuntimeErrorDetails(bundleError);
+        throw new Error(`MediaPipe JavaScript bundle failed to load from both CDNs (${details.name ? details.name + ': ' : ''}${details.message}). Check the connection or content blocker and retry.`);
+      }
+      const FilesetResolver = mediaPipeModule.FilesetResolver;
       let vision: Awaited<ReturnType<typeof FilesetResolver.forVisionTasks>> | null = null;
       let wasmError: unknown = null;
       for (const wasmRoot of visionWasmCandidates) {
@@ -242,7 +295,7 @@ export default function App() {
       }
       if (!vision) {
         const details = getRuntimeErrorDetails(wasmError);
-        throw new Error(`MediaPipe runtime files failed to load from both CDNs (${details.name ? details.name + ': ' : ''}${details.message}). Check the connection or content blocker and retry.`);
+        throw new Error(`MediaPipe WASM runtime failed to load from both CDNs for release ${mediaPipeRuntimeVersion} (${details.name ? details.name + ': ' : ''}${details.message}). Check the connection or content blocker and retry.`);
       }
       if (sessionId !== cameraSessionRef.current) {
         stream.getTracks().forEach((track) => track.stop());
@@ -258,34 +311,71 @@ export default function App() {
         minTrackingConfidence: 0.55,
       };
       if (trackHands) {
-        let landmarker: HandLandmarker | null = null;
-        let handModelError: unknown = null;
-        // Try each model source with GPU and CPU. Changing delegate alone cannot
-        // recover when the model download itself is blocked or returns an error event.
-        for (const modelAssetPath of handModelCandidates) {
-          for (const delegate of ['GPU', 'CPU'] as const) {
-            try {
-              landmarker = await HandLandmarker.createFromOptions(vision, {
-                ...trackingOptions,
-                baseOptions: { modelAssetPath, delegate },
-              });
-              break;
-            } catch (error) {
-              handModelError = error;
-            }
+        // Use the same trained GestureRecognizer-first strategy as AirHand's browser app.
+        // The separate HandLandmarker fallback preserves cursor/pinch operation when the
+        // gesture classifier or its model cannot be loaded on a mobile network.
+        const gestureOptions = {
+          runningMode: 'VIDEO' as const,
+          numHands: 2,
+          minHandDetectionConfidence: 0.62,
+          minHandPresenceConfidence: 0.60,
+          minTrackingConfidence: 0.60,
+        };
+        let recognizer: GestureRecognizer | null = null;
+        let gestureModelError: unknown = null;
+        for (const delegate of ['GPU', 'CPU'] as const) {
+          try {
+            recognizer = await mediaPipeModule.GestureRecognizer.createFromOptions(vision, {
+              ...gestureOptions,
+              baseOptions: { modelAssetPath: gestureModelCandidates[0], delegate },
+            });
+            break;
+          } catch (error) {
+            gestureModelError = error;
           }
-          if (landmarker) break;
         }
-        if (!landmarker) {
-          const details = getRuntimeErrorDetails(handModelError);
-          throw new Error(`Hand model failed from all configured sources (${details.name ? details.name + ': ' : ''}${details.message}). Check whether the network blocks model downloads, then retry.`);
+
+        if (recognizer) {
+          if (sessionId !== cameraSessionRef.current) {
+            recognizer.close();
+            stream.getTracks().forEach((track) => track.stop());
+            return;
+          }
+          gestureRecognizerRef.current = recognizer;
+        } else {
+          let fallbackLandmarker: HandLandmarker | null = null;
+          let fallbackError: unknown = gestureModelError;
+          for (const modelAssetPath of handModelCandidates) {
+            for (const delegate of ['GPU', 'CPU'] as const) {
+              try {
+                fallbackLandmarker = await mediaPipeModule.HandLandmarker.createFromOptions(vision, {
+                  ...trackingOptions,
+                  baseOptions: { modelAssetPath, delegate },
+                });
+                break;
+              } catch (error) {
+                fallbackError = error;
+              }
+            }
+            if (fallbackLandmarker) break;
+          }
+          if (!fallbackLandmarker) {
+            const gestureDetails = getRuntimeErrorDetails(gestureModelError);
+            const fallbackDetails = getRuntimeErrorDetails(fallbackError);
+            throw new Error(
+              'Both AirHand-style gesture recognition and landmark fallback failed. ' +
+              'Gesture model: ' + (gestureDetails.message || gestureDetails.name || 'unavailable') +
+              '. Landmark model: ' + (fallbackDetails.message || fallbackDetails.name || 'unavailable') +
+              '. Check the network/model download and retry.'
+            );
+          }
+          if (sessionId !== cameraSessionRef.current) {
+            fallbackLandmarker.close();
+            stream.getTracks().forEach((track) => track.stop());
+            return;
+          }
+          landmarkerRef.current = fallbackLandmarker;
         }
-        if (sessionId !== cameraSessionRef.current) {
-          landmarker.close();
-          stream.getTracks().forEach((track) => track.stop());
-          return;
-        }
-        landmarkerRef.current = landmarker;
       }
       if (trackBody) {
         const poseOptions = {
@@ -301,7 +391,7 @@ export default function App() {
         for (const modelAssetPath of poseModelCandidates) {
           for (const delegate of ['GPU', 'CPU'] as const) {
             try {
-              poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
+              poseLandmarker = await mediaPipeModule.PoseLandmarker.createFromOptions(vision, {
                 ...poseOptions,
                 baseOptions: { modelAssetPath, delegate },
               });
@@ -328,37 +418,79 @@ export default function App() {
       setCameraStarting(false);
       setCameraOn(true);
       setCameraStatus('Vision engine online');
+      lastVisionFrameRef.current = 0;
+      lastVideoTimeRef.current = -1;
+      gestureStabilizerRef.current.reset();
+      lastHandCountRef.current = -1;
       let consecutiveInferenceErrors = 0;
+      let lastLoopStatus = '';
+      const publishLoopStatus = (status: string) => {
+        if (status !== lastLoopStatus) {
+          lastLoopStatus = status;
+          setCameraStatus(status);
+        }
+      };
       const loop = (now: number) => {
+        if (sessionId !== cameraSessionRef.current) return;
         const video = videoRef.current;
+        const recognizer = gestureRecognizerRef.current;
         const tracker = landmarkerRef.current;
         const poseTracker = poseLandmarkerRef.current;
-        if (!video || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+        if (!video || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA || video.videoWidth < 2 || video.videoHeight < 2) {
           frameRef.current = requestAnimationFrame(loop);
           return;
         }
-        // Cap synchronous model inference to roughly 30 frames per second on slower devices.
-        if (now - lastVisionFrameRef.current < 33) {
+        // Like AirHand, infer only on fresh camera frames. This avoids repeatedly
+        // submitting the same frame when the screen refreshes faster than the camera.
+        if (now - lastVisionFrameRef.current < 33 || video.currentTime === lastVideoTimeRef.current) {
           frameRef.current = requestAnimationFrame(loop);
           return;
         }
         lastVisionFrameRef.current = now;
+        lastVideoTimeRef.current = video.currentTime;
         let inferenceFailed = false;
-        if (tracker) {
-          try {
+        let currentHandCount = 0;
+        try {
+          if (recognizer) {
+            const result = recognizer.recognizeForVideo(video, now);
+            const landmarks = result.landmarks ?? [];
+            const topGesture = result.gestures?.[0]?.[0];
+            latestHandLandmarksRef.current = landmarks[0];
+            handInputRef.current = deriveHandInput(
+              landmarks[0], now, handInputRef.current.pinch,
+              topGesture?.categoryName ?? null, topGesture?.score ?? 0,
+            );
+            currentHandCount = landmarks.length;
+          } else if (tracker) {
             const result = tracker.detectForVideo(video, now);
-            handInputRef.current = deriveHandInput(result.landmarks[0], now, handInputRef.current.pinch);
-            setHandCount(result.landmarks.length);
-          } catch (error) {
-            inferenceFailed = true;
+            const landmarks = result.landmarks ?? [];
+            latestHandLandmarksRef.current = landmarks[0];
+            handInputRef.current = deriveHandInput(landmarks[0], now, handInputRef.current.pinch);
+            currentHandCount = landmarks.length;
+          } else {
             handInputRef.current = { ...EMPTY_HAND_INPUT };
-            setHandCount(0);
-            if (consecutiveInferenceErrors === 0) console.warn('Nexus hand-tracking frame failed; retrying.', error);
           }
-        } else {
+        } catch (error) {
+          inferenceFailed = true;
           handInputRef.current = { ...EMPTY_HAND_INPUT };
-          setHandCount(0);
+          latestHandLandmarksRef.current = undefined;
+          gestureStabilizerRef.current.reset();
+          if (consecutiveInferenceErrors === 0) console.warn('Nexus hand-tracking frame failed; retrying.', error);
         }
+        // AirHand stabilizes noisy gesture changes and releases immediately on tracking loss.
+        const stableGesture = gestureStabilizerRef.current.update(
+          (handInputRef.current.gesture ?? 'None') as AirHandGesture,
+          now,
+        );
+        handInputRef.current = {
+          ...handInputRef.current,
+          pinch: handInputRef.current.detected && stableGesture === 'Pinch',
+        };
+        if (currentHandCount !== lastHandCountRef.current) {
+          lastHandCountRef.current = currentHandCount;
+          setHandCount(currentHandCount);
+        }
+
         if (poseTracker) {
           try {
             const poseResult = poseTracker.detectForVideo(video, now);
@@ -371,14 +503,27 @@ export default function App() {
         } else {
           bodyInputRef.current = { ...EMPTY_BODY_INPUT };
         }
+
         if (inferenceFailed) {
+          latestHandLandmarksRef.current = undefined;
           consecutiveInferenceErrors += 1;
-          if (consecutiveInferenceErrors === 1) setCameraStatus('Tracking hiccup · retrying vision engine…');
-          else if (consecutiveInferenceErrors >= 8) setCameraStatus('Tracking unavailable. Check the network and restart the camera.');
+          publishLoopStatus(consecutiveInferenceErrors >= 8
+            ? 'Vision inference failing · restart the camera'
+            : 'Tracking hiccup · retrying vision engine…');
         } else {
           consecutiveInferenceErrors = 0;
-          setCameraStatus('Vision engine online');
+          if (recognizer || tracker) {
+            const guidance = currentHandCount > 0 ? getAirHandFrameGuidance(latestHandLandmarksRef.current) : '';
+            publishLoopStatus(currentHandCount > 0
+              ? (guidance || 'Hand detected · ' + (recognizer ? 'AirHand gesture recognizer' : 'landmark fallback'))
+              : 'Tracking ready · place your hand fully in frame');
+          } else if (poseTracker) {
+            publishLoopStatus('Pose tracking ready · stand inside the frame');
+          } else {
+            publishLoopStatus('Vision runtime ready · no active tracker');
+          }
         }
+
         frameCountRef.current += 1;
         if (now - lastFrameRef.current >= 1000) {
           setFps(frameCountRef.current);
@@ -398,6 +543,8 @@ export default function App() {
       }
       if (sessionId !== cameraSessionRef.current) return;
       handInputRef.current = { ...EMPTY_HAND_INPUT };
+      gestureRecognizerRef.current?.close();
+      gestureRecognizerRef.current = null;
       landmarkerRef.current?.close();
       landmarkerRef.current = null;
       poseLandmarkerRef.current?.close();

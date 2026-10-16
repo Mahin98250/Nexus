@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
-import { FilesetResolver, ObjectDetector } from '@mediapipe/tasks-vision';
+import type { ObjectDetector } from '@mediapipe/tasks-vision';
 import { updateObjectTracks, type TrackedObject } from '../vision/objectTracks';
 
 type Props = {
@@ -7,7 +7,16 @@ type Props = {
   videoRef: RefObject<HTMLVideoElement>;
 };
 
-const visionWasm = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/wasm';
+// Match AirHand's tested browser runtime and WASM version exactly.
+const mediaPipeRuntimeVersion = '0.10.22-rc.20250304';
+const mediaPipeBundleCandidates = [
+  `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${mediaPipeRuntimeVersion}/vision_bundle.mjs`,
+  `https://unpkg.com/@mediapipe/tasks-vision@${mediaPipeRuntimeVersion}/vision_bundle.mjs`,
+];
+const visionWasmCandidates = [
+  `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${mediaPipeRuntimeVersion}/wasm`,
+  `https://unpkg.com/@mediapipe/tasks-vision@${mediaPipeRuntimeVersion}/wasm`,
+];
 const objectModel = 'https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite0/float32/1/1.tflite';
 
 export default function RealityScanOverlay({ active, videoRef }: Props) {
@@ -131,11 +140,34 @@ export default function RealityScanOverlay({ active, videoRef }: Props) {
     const initialize = async () => {
       setStatus('Loading object model…');
       try {
-        let vision: Awaited<ReturnType<typeof FilesetResolver.forVisionTasks>>;
-        try {
-          vision = await FilesetResolver.forVisionTasks(visionWasm);
-        } catch {
-          vision = await FilesetResolver.forVisionTasks('https://unpkg.com/@mediapipe/tasks-vision@0.10.22/wasm');
+        let mediaPipeModule: typeof import('@mediapipe/tasks-vision') | null = null;
+        let bundleError: unknown = null;
+        for (const bundleUrl of mediaPipeBundleCandidates) {
+          try {
+            mediaPipeModule = await import(/* @vite-ignore */ bundleUrl) as typeof import('@mediapipe/tasks-vision');
+            break;
+          } catch (error) {
+            bundleError = error;
+          }
+        }
+        if (!mediaPipeModule) {
+          const detail = bundleError instanceof Error ? bundleError.message : String(bundleError ?? 'unknown bundle error');
+          throw new Error('MediaPipe browser bundle unavailable: ' + detail.slice(0, 120));
+        }
+        const FilesetResolver = mediaPipeModule.FilesetResolver;
+        let vision: Awaited<ReturnType<typeof FilesetResolver.forVisionTasks>> | null = null;
+        let wasmError: unknown = null;
+        for (const wasmRoot of visionWasmCandidates) {
+          try {
+            vision = await FilesetResolver.forVisionTasks(wasmRoot);
+            break;
+          } catch (error) {
+            wasmError = error;
+          }
+        }
+        if (!vision) {
+          const detail = wasmError instanceof Error ? wasmError.message : String(wasmError ?? 'unknown WASM error');
+          throw new Error('Matching MediaPipe WASM runtime unavailable: ' + detail.slice(0, 120));
         }
         const options = {
           runningMode: 'VIDEO' as const,
@@ -144,12 +176,12 @@ export default function RealityScanOverlay({ active, videoRef }: Props) {
         };
         let loaded: ObjectDetector;
         try {
-          loaded = await ObjectDetector.createFromOptions(vision, {
+          loaded = await mediaPipeModule.ObjectDetector.createFromOptions(vision, {
             ...options,
             baseOptions: { modelAssetPath: objectModel, delegate: 'GPU' },
           });
         } catch {
-          loaded = await ObjectDetector.createFromOptions(vision, {
+          loaded = await mediaPipeModule.ObjectDetector.createFromOptions(vision, {
             ...options,
             baseOptions: { modelAssetPath: objectModel, delegate: 'CPU' },
           });

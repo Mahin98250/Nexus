@@ -8,6 +8,9 @@ export type HandInput = {
   openness: number;
   angle: number;
   timestamp: number;
+  /** AirHand-compatible gesture label and confidence from the active recognizer. */
+  gesture?: string;
+  confidence?: number;
 };
 
 export type Landmark = {
@@ -28,6 +31,8 @@ export const EMPTY_HAND_INPUT: HandInput = {
   openness: 0,
   angle: 0,
   timestamp: 0,
+  gesture: 'None',
+  confidence: 0,
 };
 
 export type BodyInput = {

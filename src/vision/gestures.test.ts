@@ -47,6 +47,14 @@ describe('deriveHandInput', () => {
     const input = deriveHandInput(createLandmarks({ 4: { x: 0.4, y: 0.3 }, 8: { x: 0.62, y: 0.3 } }), 1);
     expect(input.pinch).toBe(false);
   });
+  it('uses AirHand trained gesture categories when the model confidence is high enough', () => {
+    const landmarks = createLandmarks({ 4: { x: 0.28, y: 0.2 }, 8: { x: 0.72, y: 0.2 } });
+    const input = deriveHandInput(landmarks, 12, false, 'Victory', 0.92);
+    expect(input.detected).toBe(true);
+    expect(input.gesture).toBe('Peace');
+    expect(input.confidence).toBe(0.92);
+  });
+
   it('uses separate pinch-on and pinch-off thresholds to resist jitter', () => {
     const landmarks = createLandmarks({ 4: { x: 0.4, y: 0.5 }, 8: { x: 0.52, y: 0.5 } });
     expect(deriveHandInput(landmarks, 2, false).pinch).toBe(false);

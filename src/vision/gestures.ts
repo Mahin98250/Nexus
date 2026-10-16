@@ -5,11 +5,13 @@ export function deriveHandInput(
   landmarks: readonly Landmark[] | undefined,
   timestamp: number,
   previousPinch = false,
+  modelCategory: string | null = null,
+  modelScore = 0,
 ): HandInput {
   if (!landmarks || landmarks.length < 21 ||
       !landmarks.every((point) => Number.isFinite(point?.x) && Number.isFinite(point?.y))) {
     return {
-      detected: false, x: 0.5, y: 0.5, pinch: false, openness: 0, angle: 0, timestamp,
+      detected: false, x: 0.5, y: 0.5, pinch: false, openness: 0, angle: 0, timestamp, gesture: 'None', confidence: 0,
     };
   }
 
@@ -23,7 +25,7 @@ export function deriveHandInput(
   const centerY = palmPoints.reduce((sum, index) => sum + landmarks[index].y, 0) / palmPoints.length;
   const fingerSpread = [8, 12, 16, 20]
     .reduce((sum, index) => sum + distance2D(wrist, landmarks[index]), 0) / 4 / palmScale;
-  const gesture = detectAirHandGesture(landmarks, previousPinch);
+  const gesture = detectAirHandGesture(landmarks, previousPinch, modelCategory, modelScore);
 
   return {
     detected: true,
@@ -34,5 +36,7 @@ export function deriveHandInput(
     openness: clamp((fingerSpread - 1.0) / 1.55, 0, 1),
     angle: Math.atan2(indexMcp.y - pinkyMcp.y, indexMcp.x - pinkyMcp.x),
     timestamp,
+    gesture: gesture.gesture,
+    confidence: gesture.confidence ?? 0,
   };
 }
