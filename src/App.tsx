@@ -60,6 +60,7 @@ const poseModel = 'https://storage.googleapis.com/mediapipe-models/pose_landmark
 export default function App() {
   const [active, setActive] = useState<ExperienceId | null>(null);
   const [cameraOn, setCameraOn] = useState(false);
+  const [cameraStarting, setCameraStarting] = useState(false);
   const [cameraStatus, setCameraStatus] = useState('Camera is off');
   const [handCount, setHandCount] = useState(0);
   const [fps, setFps] = useState(0);
@@ -72,6 +73,7 @@ export default function App() {
   const streamRef = useRef<MediaStream | null>(null);
   const frameRef = useRef<number | null>(null);
   const cameraSessionRef = useRef(0);
+  const cameraStartingRef = useRef(false);
   const lastFrameRef = useRef(0);
   const lastVisionFrameRef = useRef(0);
   const frameCountRef = useRef(0);
@@ -79,6 +81,8 @@ export default function App() {
 
   const stopCamera = useCallback(() => {
     cameraSessionRef.current += 1;
+    cameraStartingRef.current = false;
+    setCameraStarting(false);
     if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
     frameRef.current = null;
     landmarkerRef.current?.close();
@@ -97,17 +101,22 @@ export default function App() {
   }, []);
 
   const startCamera = useCallback(async () => {
+    if (cameraStartingRef.current || streamRef.current) return;
     if (!navigator.mediaDevices?.getUserMedia) {
       setCameraStatus('Camera needs a supported browser and a secure connection.');
       return;
     }
     const sessionId = ++cameraSessionRef.current;
+    cameraStartingRef.current = true;
+    setCameraStarting(true);
     let requestedStream: MediaStream | null = null;
     setCameraStatus('Requesting camera permission…');
     try {
+      // RealityScan prefers the rear camera; the other experiences use a mirrored selfie view.
+      const facingMode = active === 'realityscan' ? 'environment' : 'user';
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: false,
-        video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
+        video: { facingMode: { ideal: facingMode }, width: { ideal: 1280 }, height: { ideal: 720 } },
       });
       requestedStream = stream;
       if (sessionId !== cameraSessionRef.current) {
@@ -127,13 +136,41 @@ export default function App() {
         stream.getTracks().forEach((track) => track.stop());
         return;
       }
-      setCameraStatus(active === 'shadowstrike' ? 'Loading pose-tracking model…' : active === 'realityscan' ? 'Preparing object detector…' : 'Loading hand-tracking model…');
-      const vision = await FilesetResolver.forVisionTasks(visionWasm);
+      // RealityScan owns its ObjectDetector. Avoid booting a second WASM runtime,
+      // which wastes memory and can stall startup on mobile browsers.
+      if (active === 'realityscan') {
+        cameraStartingRef.current = false;
+        setCameraStarting(false);
+        setCameraOn(true);
+        setCameraStatus('Camera connected · starting object detector…');
+        let monitorLastFrame = 0;
+        let monitorFrames = 0;
+        const monitor = (now: number) => {
+          if (sessionId !== cameraSessionRef.current) return;
+          frameRef.current = requestAnimationFrame(monitor);
+          monitorFrames += 1;
+          if (now - monitorLastFrame >= 1000) {
+            setFps(monitorFrames);
+            monitorFrames = 0;
+            monitorLastFrame = now;
+          }
+        };
+        frameRef.current = requestAnimationFrame(monitor);
+        return;
+      }
+
+      setCameraStatus(active === 'shadowstrike' ? 'Loading pose-tracking model…' : 'Loading hand-tracking model…');
+      let vision: Awaited<ReturnType<typeof FilesetResolver.forVisionTasks>>;
+      try {
+        vision = await FilesetResolver.forVisionTasks(visionWasm);
+      } catch {
+        vision = await FilesetResolver.forVisionTasks('https://unpkg.com/@mediapipe/tasks-vision@0.10.22/wasm');
+      }
       if (sessionId !== cameraSessionRef.current) {
         stream.getTracks().forEach((track) => track.stop());
         return;
       }
-      const trackHands = active !== 'shadowstrike' && active !== 'realityscan';
+      const trackHands = active !== 'shadowstrike';
       const trackBody = active === 'shadowstrike';
       const trackingOptions = {
         runningMode: 'VIDEO' as const,
@@ -191,8 +228,11 @@ export default function App() {
         poseLandmarkerRef.current = poseLandmarker;
       }
       if (sessionId !== cameraSessionRef.current) return;
+      cameraStartingRef.current = false;
+      setCameraStarting(false);
       setCameraOn(true);
       setCameraStatus('Vision engine online');
+      let consecutiveInferenceErrors = 0;
       const loop = (now: number) => {
         const video = videoRef.current;
         const tracker = landmarkerRef.current;
@@ -207,19 +247,41 @@ export default function App() {
           return;
         }
         lastVisionFrameRef.current = now;
+        let inferenceFailed = false;
         if (tracker) {
-          const result = tracker.detectForVideo(video, now);
-          handInputRef.current = deriveHandInput(result.landmarks[0], now, handInputRef.current.pinch);
-          setHandCount(result.landmarks.length);
+          try {
+            const result = tracker.detectForVideo(video, now);
+            handInputRef.current = deriveHandInput(result.landmarks[0], now, handInputRef.current.pinch);
+            setHandCount(result.landmarks.length);
+          } catch (error) {
+            inferenceFailed = true;
+            handInputRef.current = { ...EMPTY_HAND_INPUT };
+            setHandCount(0);
+            if (consecutiveInferenceErrors === 0) console.warn('Nexus hand-tracking frame failed; retrying.', error);
+          }
         } else {
           handInputRef.current = { ...EMPTY_HAND_INPUT };
           setHandCount(0);
         }
         if (poseTracker) {
-          const poseResult = poseTracker.detectForVideo(video, now);
-          bodyInputRef.current = deriveBodyInput(poseResult.landmarks[0], now);
+          try {
+            const poseResult = poseTracker.detectForVideo(video, now);
+            bodyInputRef.current = deriveBodyInput(poseResult.landmarks[0], now);
+          } catch (error) {
+            inferenceFailed = true;
+            bodyInputRef.current = { ...EMPTY_BODY_INPUT };
+            if (consecutiveInferenceErrors === 0) console.warn('Nexus pose-tracking frame failed; retrying.', error);
+          }
         } else {
           bodyInputRef.current = { ...EMPTY_BODY_INPUT };
+        }
+        if (inferenceFailed) {
+          consecutiveInferenceErrors += 1;
+          if (consecutiveInferenceErrors === 1) setCameraStatus('Tracking hiccup · retrying vision engine…');
+          else if (consecutiveInferenceErrors >= 8) setCameraStatus('Tracking unavailable. Check the network and restart the camera.');
+        } else {
+          consecutiveInferenceErrors = 0;
+          setCameraStatus('Vision engine online');
         }
         frameCountRef.current += 1;
         if (now - lastFrameRef.current >= 1000) {
@@ -240,12 +302,15 @@ export default function App() {
       poseLandmarkerRef.current?.close();
       poseLandmarkerRef.current = null;
       bodyInputRef.current = { ...EMPTY_BODY_INPUT };
+      cameraStartingRef.current = false;
+      setCameraStarting(false);
       setCameraOn(false);
       const message = error instanceof Error ? error.message : 'Camera could not start.';
       if (message.toLowerCase().includes('permission') || message.toLowerCase().includes('denied')) {
         setCameraStatus('Camera permission was denied. Allow camera access in your browser settings.');
       } else {
-        setCameraStatus('Could not start vision engine. Check camera access and your connection, then retry.');
+        const detail = message.replace(/\s+/g, ' ').slice(0, 110);
+        setCameraStatus('Could not start vision engine: ' + detail);
       }
     }
   }, [active]);
@@ -301,8 +366,8 @@ export default function App() {
               <p>{activeExperience.detail}</p>
             </div>
             <div className="workspace-actions">
-              {cameraOn ? (
-                <button className="button button-secondary" onClick={stopCamera}><X size={16} /> Stop camera</button>
+              {cameraOn || cameraStarting ? (
+                <button className="button button-secondary" onClick={stopCamera}><X size={16} /> {cameraStarting ? 'Cancel startup' : 'Stop camera'}</button>
               ) : (
                 <button className="button button-primary" onClick={() => void startCamera()}><Camera size={16} /> Enable camera <ArrowRight size={16} /></button>
               )}
@@ -312,11 +377,11 @@ export default function App() {
             <div className="camera-panel">
               <div className="panel-topline">
                 <span><span className={cameraOn ? 'status-dot active' : 'status-dot'} /> LIVE INPUT</span>
-                <span className="panel-topline-right">{cameraOn ? 'CAMERA CONNECTED' : 'AWAITING INPUT'}</span>
+                <span className="panel-topline-right">{cameraOn ? 'CAMERA CONNECTED' : cameraStarting ? 'STARTING CAMERA' : 'AWAITING INPUT'}</span>
               </div>
-              <div className={'camera-stage ' + (cameraOn ? 'camera-stage-live' : '') + (activeExperience.id === 'holodesk' ? ' is-holodesk' : '') + (activeExperience.id === 'shadowstrike' ? ' is-shadowstrike' : '') + (activeExperience.id === 'airos' ? ' is-airos' : '') + (activeExperience.id === 'realityscan' ? ' is-realityscan' : '')}>
-                <video ref={videoRef} className={cameraOn ? 'camera-video visible' : 'camera-video'} autoPlay playsInline muted />
-                {!cameraOn && activeExperience.id !== 'shadowstrike' && activeExperience.id !== 'airos' && <div className="camera-placeholder">
+              <div className={'camera-stage ' + (cameraOn || cameraStarting ? 'camera-stage-live' : '') + (activeExperience.id === 'holodesk' ? ' is-holodesk' : '') + (activeExperience.id === 'shadowstrike' ? ' is-shadowstrike' : '') + (activeExperience.id === 'airos' ? ' is-airos' : '') + (activeExperience.id === 'realityscan' ? ' is-realityscan' : '')}>
+                <video ref={videoRef} className={(cameraOn || cameraStarting ? 'camera-video visible' : 'camera-video') + (activeExperience.id === 'realityscan' ? ' realityscan-camera-video' : '')} autoPlay playsInline muted />
+                {!cameraOn && !cameraStarting && activeExperience.id !== 'shadowstrike' && activeExperience.id !== 'airos' && <div className="camera-placeholder">
                   <div className="camera-orbit"><div className="orbit-ring orbit-ring-one" /><div className="orbit-ring orbit-ring-two" /><div className="camera-symbol"><Camera size={28} /></div></div>
                   <h3>{activeExperience.id === 'holodesk' ? 'Touchless 3D is ready.' : 'Give Nexus a point of view.'}</h3>
                   <p>{activeExperience.id === 'holodesk' ? 'Drag the hologram to move it. Enable the camera to grab it with a pinch.' : 'Enable your camera to initialize the shared vision engine.'}</p>
@@ -334,8 +399,8 @@ export default function App() {
                 {activeExperience.id === 'realityscan' && <RealityScanOverlay active={cameraOn} videoRef={videoRef} />}
               </div>
               <div className="camera-footer">
-                <span className="camera-status"><span className={cameraOn ? 'status-dot active' : 'status-dot'} /> {cameraStatus}</span>
-                <span className="camera-fps">{cameraOn ? fps + ' FPS · ' + (activeExperience.id === 'shadowstrike' ? (bodyInputRef.current.detected ? 'body tracked' : 'find full body') : activeExperience.id === 'realityscan' ? 'object detector' : handCount + ' hands') : 'NO SIGNAL'}</span>
+                <span className="camera-status"><span className={cameraOn || cameraStarting ? 'status-dot active' : 'status-dot'} /> {cameraStatus}</span>
+                <span className="camera-fps">{cameraOn || cameraStarting ? fps + ' FPS · ' + (activeExperience.id === 'shadowstrike' ? (bodyInputRef.current.detected ? 'body tracked' : 'find full body') : activeExperience.id === 'realityscan' ? 'object detector' : handCount + ' hands') : 'NO SIGNAL'}</span>
               </div>
             </div>
             <aside className="inspector">
@@ -346,7 +411,7 @@ export default function App() {
               </div>
               <div className="inspector-section">
                 <span className="field-label">VISION ENGINE</span>
-                <div className="metric-row"><span>Camera</span><span className={cameraOn ? 'metric-value online' : 'metric-value'}>{cameraOn ? 'Connected' : 'Standby'}</span></div>
+                <div className="metric-row"><span>Camera</span><span className={cameraOn ? 'metric-value online' : 'metric-value'}>{cameraOn ? 'Connected' : cameraStarting ? 'Starting…' : 'Standby'}</span></div>
                 <div className="metric-row"><span>{activeExperience.id === 'shadowstrike' ? 'Body pose' : activeExperience.id === 'realityscan' ? 'Object model' : 'Hand landmarks'}</span><span className="metric-value">{cameraOn ? (activeExperience.id === 'shadowstrike' ? (bodyInputRef.current.detected ? 'Detected' : 'Searching') : activeExperience.id === 'realityscan' ? 'Loading / active' : handCount + ' detected') : 'Waiting'}</span></div>
                 <div className="metric-row"><span>Frame rate</span><span className="metric-value">{cameraOn ? fps + ' FPS' : '—'}</span></div>
                 <div className="metric-row"><span>Processing</span><span className="metric-value">On-device</span></div>
