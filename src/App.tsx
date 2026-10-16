@@ -71,11 +71,13 @@ export default function App() {
   const poseLandmarkerRef = useRef<PoseLandmarker | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const frameRef = useRef<number | null>(null);
+  const cameraSessionRef = useRef(0);
   const lastFrameRef = useRef(0);
   const frameCountRef = useRef(0);
   const activeExperience = experiences.find((item) => item.id === active) ?? null;
 
   const stopCamera = useCallback(() => {
+    cameraSessionRef.current += 1;
     if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
     frameRef.current = null;
     landmarkerRef.current?.close();
@@ -98,12 +100,19 @@ export default function App() {
       setCameraStatus('Camera needs a supported browser and a secure connection.');
       return;
     }
+    const sessionId = ++cameraSessionRef.current;
+    let requestedStream: MediaStream | null = null;
     setCameraStatus('Requesting camera permission…');
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: false,
         video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
       });
+      requestedStream = stream;
+      if (sessionId !== cameraSessionRef.current) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
       streamRef.current = stream;
       if (!videoRef.current) {
         stream.getTracks().forEach((track) => track.stop());
@@ -113,8 +122,16 @@ export default function App() {
       }
       videoRef.current.srcObject = stream;
       await videoRef.current.play();
+      if (sessionId !== cameraSessionRef.current) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
       setCameraStatus(active === 'shadowstrike' ? 'Loading pose-tracking model…' : active === 'realityscan' ? 'Preparing object detector…' : 'Loading hand-tracking model…');
       const vision = await FilesetResolver.forVisionTasks(visionWasm);
+      if (sessionId !== cameraSessionRef.current) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
       const trackHands = active !== 'shadowstrike' && active !== 'realityscan';
       const trackBody = active === 'shadowstrike';
       const trackingOptions = {
@@ -136,6 +153,11 @@ export default function App() {
             ...trackingOptions,
             baseOptions: { modelAssetPath: handModel, delegate: 'CPU' },
           });
+        }
+        if (sessionId !== cameraSessionRef.current) {
+          landmarker.close();
+          stream.getTracks().forEach((track) => track.stop());
+          return;
         }
         landmarkerRef.current = landmarker;
       }
@@ -160,8 +182,14 @@ export default function App() {
             baseOptions: { modelAssetPath: poseModel, delegate: 'CPU' },
           });
         }
+        if (sessionId !== cameraSessionRef.current) {
+          poseLandmarker.close();
+          stream.getTracks().forEach((track) => track.stop());
+          return;
+        }
         poseLandmarkerRef.current = poseLandmarker;
       }
+      if (sessionId !== cameraSessionRef.current) return;
       setCameraOn(true);
       setCameraStatus('Vision engine online');
       const loop = (now: number) => {
@@ -196,7 +224,8 @@ export default function App() {
       };
       frameRef.current = requestAnimationFrame(loop);
     } catch (error) {
-      streamRef.current?.getTracks().forEach((track) => track.stop());
+      requestedStream?.getTracks().forEach((track) => track.stop());
+      if (sessionId !== cameraSessionRef.current) return;
       streamRef.current = null;
       handInputRef.current = { ...EMPTY_HAND_INPUT };
       landmarkerRef.current?.close();
