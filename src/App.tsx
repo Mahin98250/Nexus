@@ -154,7 +154,9 @@ export default function App() {
         if (enabled) frame = requestAnimationFrame(tick);
         return;
       }
-      const x = clampGesturePointer(hand.x);
+      // The rear-camera RealityScan preview is not mirrored; undo the standard selfie mirror there.
+      const normalizedX = active === 'realityscan' ? 1 - hand.x : hand.x;
+      const x = clampGesturePointer(normalizedX);
       const y = clampGesturePointer(hand.y);
       cursor.style.visibility = 'visible';
       cursor.style.left = (x * 100) + 'vw';
