@@ -170,7 +170,7 @@ export default function App() {
         stream.getTracks().forEach((track) => track.stop());
         return;
       }
-      const trackHands = active !== 'shadowstrike' && active !== 'realityscan';
+      const trackHands = active !== 'shadowstrike';
       const trackBody = active === 'shadowstrike';
       const trackingOptions = {
         runningMode: 'VIDEO' as const,
