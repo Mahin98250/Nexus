@@ -4,7 +4,7 @@ import {
   Hand, Layers3, Maximize2, Monitor, Move3D, Play, ScanLine,
   Settings2, ShieldCheck, Sparkles, Target, X,
 } from 'lucide-react';
-import { FilesetResolver, GestureRecognizer, HandLandmarker, PoseLandmarker } from '@mediapipe/tasks-vision';
+import type { GestureRecognizer, HandLandmarker, PoseLandmarker } from '@mediapipe/tasks-vision';
 import ShadowStrikeGame from './components/ShadowStrikeGame';
 import AirOSDesktop from './components/AirOSDesktop';
 import RealityScanOverlay from './components/RealityScanOverlay';
@@ -54,9 +54,15 @@ const experiences: Experience[] = [
   },
 ];
 
+// Keep the JavaScript runtime and WASM assets pinned to the exact release used by AirHand.
+const mediaPipeRuntimeVersion = '0.10.22-rc.20250304';
+const mediaPipeBundleCandidates = [
+  `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${mediaPipeRuntimeVersion}/vision_bundle.mjs`,
+  `https://unpkg.com/@mediapipe/tasks-vision@${mediaPipeRuntimeVersion}/vision_bundle.mjs`,
+];
 const visionWasmCandidates = [
-  'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/wasm',
-  'https://unpkg.com/@mediapipe/tasks-vision@0.10.22/wasm',
+  `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${mediaPipeRuntimeVersion}/wasm`,
+  `https://unpkg.com/@mediapipe/tasks-vision@${mediaPipeRuntimeVersion}/wasm`,
 ];
 // Some mobile networks can load the camera but block or interrupt Google Cloud Storage.
 // Keep a second model mirror so camera permission success is not mistaken for model success.
@@ -241,6 +247,22 @@ export default function App() {
       }
 
       setCameraStatus(active === 'shadowstrike' ? 'Loading pose-tracking model…' : 'Loading hand-tracking model…');
+      let mediaPipeModule: typeof import('@mediapipe/tasks-vision') | null = null;
+      let bundleError: unknown = null;
+      for (const bundleUrl of mediaPipeBundleCandidates) {
+        try {
+          // @vite-ignore keeps this exact versioned browser bundle external, like AirHand.
+          mediaPipeModule = await import(/* @vite-ignore */ bundleUrl) as typeof import('@mediapipe/tasks-vision');
+          break;
+        } catch (error) {
+          bundleError = error;
+        }
+      }
+      if (!mediaPipeModule) {
+        const details = getRuntimeErrorDetails(bundleError);
+        throw new Error(`MediaPipe JavaScript bundle failed to load from both CDNs (${details.name ? details.name + ': ' : ''}${details.message}). Check the connection or content blocker and retry.`);
+      }
+      const FilesetResolver = mediaPipeModule.FilesetResolver;
       let vision: Awaited<ReturnType<typeof FilesetResolver.forVisionTasks>> | null = null;
       let wasmError: unknown = null;
       for (const wasmRoot of visionWasmCandidates) {
@@ -253,7 +275,7 @@ export default function App() {
       }
       if (!vision) {
         const details = getRuntimeErrorDetails(wasmError);
-        throw new Error(`MediaPipe runtime files failed to load from both CDNs (${details.name ? details.name + ': ' : ''}${details.message}). Check the connection or content blocker and retry.`);
+        throw new Error(`MediaPipe WASM runtime failed to load from both CDNs for release ${mediaPipeRuntimeVersion} (${details.name ? details.name + ': ' : ''}${details.message}). Check the connection or content blocker and retry.`);
       }
       if (sessionId !== cameraSessionRef.current) {
         stream.getTracks().forEach((track) => track.stop());
@@ -283,7 +305,7 @@ export default function App() {
         let gestureModelError: unknown = null;
         for (const delegate of ['GPU', 'CPU'] as const) {
           try {
-            recognizer = await GestureRecognizer.createFromOptions(vision, {
+            recognizer = await mediaPipeModule.GestureRecognizer.createFromOptions(vision, {
               ...gestureOptions,
               baseOptions: { modelAssetPath: gestureModelCandidates[0], delegate },
             });
@@ -306,7 +328,7 @@ export default function App() {
           for (const modelAssetPath of handModelCandidates) {
             for (const delegate of ['GPU', 'CPU'] as const) {
               try {
-                fallbackLandmarker = await HandLandmarker.createFromOptions(vision, {
+                fallbackLandmarker = await mediaPipeModule.HandLandmarker.createFromOptions(vision, {
                   ...trackingOptions,
                   baseOptions: { modelAssetPath, delegate },
                 });
@@ -349,7 +371,7 @@ export default function App() {
         for (const modelAssetPath of poseModelCandidates) {
           for (const delegate of ['GPU', 'CPU'] as const) {
             try {
-              poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
+              poseLandmarker = await mediaPipeModule.PoseLandmarker.createFromOptions(vision, {
                 ...poseOptions,
                 baseOptions: { modelAssetPath, delegate },
               });
