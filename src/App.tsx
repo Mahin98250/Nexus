@@ -161,7 +161,7 @@ export default function App() {
       cursor.style.top = (y * 100) + 'vh';
       cursor.classList.toggle('global-gesture-pinching', hand.pinch);
       const hit = document.elementFromPoint(x * window.innerWidth, y * window.innerHeight) as HTMLElement | null;
-      const target = hit?.closest<HTMLElement>('.app-shell button:not(:disabled), .app-shell [role="button"], .app-shell a[href]');
+      const target = hit?.closest<HTMLElement>('.app-shell button:not(:disabled), .app-shell [role="button"], .app-shell a[href]') ?? null;
       if (target && target.closest('.air-os-layer')) {
         // AirOS is deliberately excluded here; its own gesture controller handles it.
         clearHover();
