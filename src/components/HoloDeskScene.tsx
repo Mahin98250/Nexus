@@ -38,10 +38,11 @@ export default function HoloDeskScene({ inputRef, cameraEnabled }: HoloDeskScene
       setWebglUnavailable(true);
     };
 
-    renderer.domElement.addEventListener('webglcontextlost', (event) => {
+    const onWebGLContextLost = (event: Event) => {
       event.preventDefault();
       switchToFallback();
-    });
+    };
+    renderer.domElement.addEventListener('webglcontextlost', onWebGLContextLost);
 
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.25));
     renderer.setSize(Math.max(host.clientWidth, 1), Math.max(host.clientHeight, 1));
@@ -218,7 +219,7 @@ export default function HoloDeskScene({ inputRef, cameraEnabled }: HoloDeskScene
       renderer.domElement.removeEventListener('pointermove', onPointerMove);
       renderer.domElement.removeEventListener('pointerup', onPointerUp);
       renderer.domElement.removeEventListener('pointercancel', onPointerUp);
-      renderer.domElement.removeEventListener('webglcontextlost', switchToFallback as EventListener);
+      renderer.domElement.removeEventListener('webglcontextlost', onWebGLContextLost);
       try { renderer.dispose(); } catch { /* Context may already be lost. */ }
       scene.traverse((object) => {
         if (object instanceof THREE.Mesh || object instanceof THREE.Points) {
