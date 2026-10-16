@@ -164,3 +164,48 @@
 .air-os-layer.light .air-gesture-guide>p,.air-os-layer.light .air-gesture-list small{color:#596581}
 .air-os-layer.light .air-gesture-list article{background:rgba(95,105,160,.035);border-color:rgba(77,86,140,.12)}
 @media(max-width:700px){.air-os-help{top:45px;left:8px;padding:8px;font-size:9px}.air-gesture-guide{padding:16px;border-radius:15px}.air-gesture-guide h3{font-size:19px}.air-gesture-list article{padding:10px;gap:9px}.air-gesture-list small{font-size:11px}}
+
+
+/* Global Nexus theme system. The selected theme persists across reloads. */
+.app-shell.theme-light{--bg:#f3f5fc;--panel:#ffffff;--line:rgba(43,54,91,.14);--muted:#68718b;--white:#18213b;color:#1b2440;background:radial-gradient(ellipse at 49% -30%,rgba(127,113,255,.14),transparent 58%),#f3f5fc}
+.theme-light .topbar{border-bottom-color:rgba(45,55,92,.12)}
+.theme-light .brand-mark{background:linear-gradient(145deg,rgba(128,113,255,.14),rgba(80,89,160,.035));box-shadow:0 0 24px rgba(114,101,255,.08)}
+.theme-light .brand-beta{color:#6b61a8;border-color:rgba(101,89,176,.23)}
+.theme-light .connection-pill{color:#626b85;background:rgba(255,255,255,.62);border-color:rgba(43,54,91,.14)}
+.theme-light .icon-button{color:#5c6683}
+.theme-light .icon-button:hover{background:#e7eaf7;border-color:rgba(43,54,91,.14);color:#282e4d}
+.theme-light .hero-copy,.theme-light .experience-card .card-content p{color:#65708a}
+.theme-light .eyebrow{color:#686f90}
+.theme-light .experience-card{background:linear-gradient(150deg,rgba(255,255,255,.98),rgba(244,246,255,.95));border-color:rgba(55,66,109,.13);box-shadow:0 14px 45px rgba(40,49,90,.055)}
+.theme-light .experience-card:hover{border-color:rgba(123,107,240,.38);box-shadow:0 18px 55px rgba(56,58,125,.11)}
+.theme-light .card-number,.theme-light .card-category{color:#777f9a}
+.theme-light .card-bottom{border-top-color:rgba(43,54,91,.1);color:#6b7490}
+.theme-light .bottom-strip{background:rgba(255,255,255,.75);border-color:rgba(43,54,91,.12)}
+.theme-light .bottom-strip>div:nth-child(2) span{color:#65708a}
+.theme-light .site-footer{color:#77809a;border-top-color:rgba(43,54,91,.12)}
+.theme-light .workspace-toolbar{border-bottom-color:rgba(43,54,91,.12)}
+.theme-light .back-button{color:#616b86;border-color:rgba(43,54,91,.13);background:rgba(255,255,255,.65)}
+.theme-light .workspace-breadcrumb,.theme-light .workspace-version{color:#78819c}
+.theme-light .workspace-heading p{color:#66708a}
+.theme-light .camera-panel,.theme-light .inspector{background:rgba(255,255,255,.84);border-color:rgba(43,54,91,.14);box-shadow:0 16px 50px rgba(40,49,90,.06)}
+.theme-light .panel-topline,.theme-light .inspector-title{color:#737c98;border-bottom-color:rgba(43,54,91,.1)}
+.theme-light .camera-stage{background:#e7ebf6}
+.theme-light .camera-footer{color:#6b7590;border-top-color:rgba(43,54,91,.1)}
+.theme-light .field-label{color:#858da5}
+.theme-light .selected-experience,.theme-light .feature-tag{background:rgba(105,110,170,.06);border-color:rgba(43,54,91,.12)}
+.theme-light .selected-experience strong,.theme-light .metric-row{color:#313c5a}
+.theme-light .selected-experience span,.theme-light .inspector-note p{color:#6a7490}
+.theme-light .metric-value{color:#525e7b}
+.theme-light .inspector-note{background:rgba(121,107,235,.055);border-color:rgba(121,107,235,.12)}
+.theme-light .quick-switch button{background:rgba(255,255,255,.75);border-color:rgba(43,54,91,.13);color:#535e7d}
+.theme-light .quick-switch button:hover{background:#e9ebfa;color:#3e3b80}
+.theme-light .bottom-label,.theme-light .build-label{color:#78819a}
+.theme-light .modal-backdrop{background:rgba(31,37,64,.38)}
+.theme-light .help-modal{background:rgba(250,251,255,.98);border-color:rgba(43,54,91,.17);color:#202945;box-shadow:0 28px 90px rgba(40,49,90,.2)}
+.theme-light .help-modal>p,.theme-light .help-list small{color:#65708a}
+.theme-light .help-list>div{border-color:rgba(43,54,91,.12);background:rgba(95,105,160,.035)}
+.theme-light .modal-close{color:#5c6683}
+.theme-light .workspace-bottom{border-top-color:rgba(43,54,91,.12)}
+.theme-light .ambient{opacity:.07}
+.theme-light .button-secondary{background:rgba(255,255,255,.8);border-color:rgba(43,54,91,.15);color:#35405f}
+@media(prefers-reduced-motion:reduce){.app-shell *, .app-shell *::before,.app-shell *::after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important;transition-duration:.01ms!important}}
