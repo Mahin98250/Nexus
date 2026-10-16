@@ -134,3 +134,12 @@
 .air-os-layer.light .air-launcher{background:rgba(239,243,255,.96);color:#1b2440}.air-os-layer.light .air-launcher-grid>button{color:#1c2540;background:rgba(255,255,255,.5)}.air-os-layer.light .air-launcher-grid small{color:#687391}
 @media(max-width:700px){.air-os-layer{min-height:620px}.air-os-menubar{height:38px;padding:0 10px;gap:9px}.air-os-logo{font-size:9px;letter-spacing:.7px}.air-os-menuright{font-size:7px;gap:6px}.air-os-date{top:49px;right:12px}.air-os-date strong{font-size:20px}.air-window{width:min(360px,calc(100% - 24px));min-width:0;min-height:205px;max-height:calc(100% - 112px)}.air-window-title{height:38px;min-height:38px;padding:0 10px;font-size:10px}.air-app-body{font-size:12px}.browser-welcome{padding:20px 12px 15px}.browser-welcome h3{font-size:21px}.browser-welcome p{font-size:11px}.notes-body textarea{min-height:100px;font-size:12px}.terminal-output{min-height:80px;max-height:135px}.air-os-dock{bottom:9px;gap:3px;padding:6px 7px}.dock-app{width:35px;height:36px}.dock-app svg{width:18px;height:18px}.dock-divider{height:22px}.air-os-corner{display:none}.air-window-maximized{left:8px!important;top:46px!important;width:calc(100% - 16px)!important;height:calc(100% - 102px)!important}.air-launcher{padding:16px;border-radius:16px}.air-launcher-heading h3{font-size:19px}.air-launcher-grid>button{padding:12px}}
 @media(max-width:390px){.air-os-layer{min-height:600px}.air-window{width:calc(100% - 20px);left:10px!important}.air-os-menuright{font-size:6px}.air-launcher-grid{gap:7px}.air-launcher-grid>button{padding:10px}}
+
+.air-launcher-search{display:flex;align-items:center;gap:10px;margin-bottom:13px;padding:12px 13px;border:1px solid rgba(180,185,255,.18);border-radius:10px;background:rgba(255,255,255,.045);color:#9ea8ca}
+.air-launcher-search:focus-within{border-color:rgba(166,150,255,.58);box-shadow:0 0 0 3px rgba(135,118,255,.1)}
+.air-launcher-search input{width:100%;min-width:0;border:0;outline:0;background:transparent;color:inherit;font:12px var(--mono)}
+.air-launcher-search input::placeholder{color:#77809f}
+.air-launcher-empty{grid-column:1/-1;margin:0;padding:20px 10px;text-align:center;color:#a0a8c4;font-size:11px;line-height:1.6}
+.air-launcher-foot span{margin-left:auto;color:#8f97b3}
+.air-os-layer.light .air-launcher-search{background:rgba(255,255,255,.7);color:#3d4868;border-color:rgba(67,77,127,.18)}
+@media(max-width:700px){.air-launcher-search{padding:11px}.air-launcher-search input{font-size:16px}.air-launcher-foot{font-size:8px}}
