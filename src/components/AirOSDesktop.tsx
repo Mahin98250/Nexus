@@ -10,6 +10,7 @@ type WindowId = 'browser' | 'notes' | 'terminal' | 'music';
 type NexusModeId = 'holodesk' | 'shadowstrike' | 'airos' | 'realityscan';
 type KeyboardTarget = 'address' | 'note' | 'terminal' | 'launcher' | null;
 const keyboardRows = ['qwertyuiop', 'asdfghjkl', 'zxcvbnm'];
+const numericKeyboardRows = ['1234567890', '@#$%&*-+=', './:_?!()'];
 type AirWindow = { id: WindowId; x: number; y: number; z: number; minimized: boolean; closed: boolean };
 type DragState = { id: WindowId; startX: number; startY: number; originX: number; originY: number; source: 'pointer' | 'gesture' };
 
@@ -70,6 +71,7 @@ export default function AirOSDesktop({ inputRef, cameraEnabled, onSwitchExperien
   const [launcherQuery, setLauncherQuery] = useState('');
   const [showGestureGuide, setShowGestureGuide] = useState(false);
   const [keyboardTarget, setKeyboardTarget] = useState<KeyboardTarget>(null);
+  const [keyboardLayout, setKeyboardLayout] = useState<'letters' | 'numbers'>('letters');
   cameraRef.current = cameraEnabled;
   windowsRef.current = windows;
 
@@ -95,6 +97,7 @@ export default function AirOSDesktop({ inputRef, cameraEnabled, onSwitchExperien
     setShowLauncher(false);
     setLauncherQuery('');
     setKeyboardTarget(null);
+    setKeyboardLayout('letters');
   };
 
   const startPointerDrag = (event: ReactPointerEvent<HTMLElement>, id: WindowId) => {
@@ -136,8 +139,11 @@ export default function AirOSDesktop({ inputRef, cameraEnabled, onSwitchExperien
     if (!keyboardTarget) return;
     if (key === 'Done') {
       setKeyboardTarget(null);
+      setKeyboardLayout('letters');
       return;
     }
+    if (key === '123') { setKeyboardLayout('numbers'); return; }
+    if (key === 'ABC') { setKeyboardLayout('letters'); return; }
     if (key === 'Enter') {
       if (keyboardTarget === 'terminal') executeTerminalCommand(terminalCommand);
       if (keyboardTarget === 'address') setAddress((value) => value.trim() || 'nexus://welcome');
@@ -395,7 +401,7 @@ export default function AirOSDesktop({ inputRef, cameraEnabled, onSwitchExperien
       })}
 
       <button className="air-os-help" onClick={() => setShowGestureGuide((value) => !value)} aria-label="Open gesture manual" title="Gesture manual"><CircleHelp size={17} /><span>Gesture guide</span></button>
-      {showGestureGuide && <section className="air-gesture-guide" role="dialog" aria-label="AirOS gesture manual"><header><div><span>QUICK START</span><h3>Control AirOS with your hand</h3></div><button onClick={() => setShowGestureGuide(false)} aria-label="Close gesture manual"><X size={17} /></button></header><p>Keep your hand fully visible in the camera preview. Move slowly at first; tracking needs good light and a clear background.</p><div className="air-gesture-list"><article><b className="gesture-symbol">✋</b><div><strong>Move cursor</strong><small>Move your open hand around the camera view. The cursor follows your hand.</small></div></article><article><b className="gesture-symbol">🤏</b><div><strong>Grab and move a window</strong><small>Place the cursor over a window title, pinch thumb and index finger together, move, then release.</small></div></article><article><b className="gesture-symbol">☝️</b><div><strong>Choose an app</strong><small>Use touch or mouse on the dock or launcher. Gesture window dragging is supported; not every button is gesture-mapped yet.</small></div></article><article><b className="gesture-symbol">✊</b><div><strong>Release / pause</strong><small>Open the pinch to release the window. If tracking is lost, bring your hand back into view.</small></div></article></div><footer><ShieldCheck size={13} /> Camera processing runs in this browser · ESC closes this guide</footer></section>}
+      {showGestureGuide && <section className="air-gesture-guide" role="dialog" aria-label="AirOS gesture manual"><header><div><span>QUICK START</span><h3>Control AirOS with your hand</h3></div><button onClick={() => setShowGestureGuide(false)} aria-label="Close gesture manual"><X size={17} /></button></header><p>Keep your hand fully visible in the camera preview. Move slowly at first; tracking needs good light and a clear background.</p><div className="air-gesture-list"><article><b className="gesture-symbol">✋</b><div><strong>Move cursor</strong><small>Move your hand around the camera view. The cursor follows your index fingertip.</small></div></article><article><b className="gesture-symbol">🤏</b><div><strong>Grab and move a window</strong><small>Place the cursor over a window title, pinch thumb and index finger together, move, then release.</small></div></article><article><b className="gesture-symbol">☝️</b><div><strong>Choose an app</strong><small>Pinch any highlighted button to activate it, including dock, window controls, launcher and experience switching.</small></div></article><article><b className="gesture-symbol">✊</b><div><strong>Release / pause</strong><small>Release the pinch to drop a window. Pinch a text field to open the gesture keyboard; use 123 for punctuation and digits.</small></div></article></div><footer><ShieldCheck size={13} /> Camera processing runs in this browser · ESC closes this guide</footer></section>}
       <div className="air-os-dock">
         {(Object.keys(titles) as WindowId[]).map((id) => {
           const Icon = icons[id];
@@ -410,7 +416,7 @@ export default function AirOSDesktop({ inputRef, cameraEnabled, onSwitchExperien
       </div>
 
       {showLauncher && <div className="air-launcher" role="dialog" aria-label="AirOS app launcher"><div className="air-launcher-heading"><div><span>WORKSPACE · CTRL K</span><h3>What are we opening?</h3></div><button onClick={() => { setShowLauncher(false); setLauncherQuery(''); }} aria-label="Close launcher"><X size={16} /></button></div><label className="air-launcher-search"><Search size={16} /><input autoFocus value={launcherQuery} onChange={(event) => setLauncherQuery(event.target.value)} onFocus={() => { if (cameraRef.current) setKeyboardTarget('launcher'); }} placeholder="Search apps…" aria-label="Search apps" /></label><div className="air-launcher-grid">{(Object.keys(titles) as WindowId[]).filter((id) => titles[id].toLowerCase().includes(launcherQuery.toLowerCase())).map((id) => { const Icon = icons[id]; return <button key={id} onClick={() => openWindow(id)}><span><Icon size={21} /></span><strong>{titles[id]}</strong><small>{id === 'browser' ? 'Explore your workspace' : id === 'notes' ? 'Capture an idea' : id === 'terminal' ? 'Run safe demo commands' : 'Ambient focus audio'}</small></button>; })}{!(Object.keys(titles) as WindowId[]).some((id) => titles[id].toLowerCase().includes(launcherQuery.toLowerCase())) && !modeIds.some((id) => modeTitles[id].toLowerCase().includes(launcherQuery.toLowerCase())) && <p className="air-launcher-empty">No apps match “{launcherQuery}”. Try Notes, Terminal or HoloDesk.</p>}</div><div className="air-launcher-section-label">NEXUS EXPERIENCES</div><div className="air-launcher-grid air-launcher-modes">{modeIds.filter((id) => modeTitles[id].toLowerCase().includes(launcherQuery.toLowerCase())).map((id) => { const Icon = modeIcons[id]; return <button key={id} onClick={() => { setShowLauncher(false); setLauncherQuery(''); onSwitchExperience(id); }}><span><Icon size={21} /></span><strong>{modeTitles[id]}</strong><small>{id === 'holodesk' ? '3D hand interaction' : id === 'shadowstrike' ? 'Body-controlled game' : id === 'airos' ? 'Return to desktop' : 'Live object detection'}</small></button>; })}</div><div className="air-launcher-foot"><ShieldCheck size={13} /> Runs locally in this browser <span>ESC to close</span></div></div>}
-      {keyboardTarget && cameraEnabled && <section className="air-gesture-keyboard" role="dialog" aria-label="On-screen gesture keyboard"><header><span><CircleHelp size={13} /> GESTURE KEYBOARD · {keyboardTarget.toUpperCase()}</span><button onClick={() => setKeyboardTarget(null)}>Done <X size={14} /></button></header>{keyboardRows.map((row) => <div className="air-keyboard-row" key={row}>{row.split('').map((key) => <button key={key} onClick={() => pressVirtualKey(key)}>{key}</button>)}</div>)}<div className="air-keyboard-row air-keyboard-actions"><button onClick={() => pressVirtualKey('Backspace')}>⌫</button><button onClick={() => pressVirtualKey('Space')}>Space</button><button onClick={() => pressVirtualKey('Enter')}>Enter ↵</button><button onClick={() => pressVirtualKey('Done')}>Done</button></div></section>}
+      {keyboardTarget && cameraEnabled && <section className="air-gesture-keyboard" role="dialog" aria-label="On-screen gesture keyboard"><header><span><CircleHelp size={13} /> GESTURE KEYBOARD · {keyboardTarget.toUpperCase()}</span><button onClick={() => pressVirtualKey('Done')}>Done <X size={14} /></button></header>{(keyboardLayout === 'letters' ? keyboardRows : numericKeyboardRows).map((row) => <div className="air-keyboard-row" key={row}>{row.split('').map((key) => <button key={key} onClick={() => pressVirtualKey(key)}>{key}</button>)}</div>)}<div className="air-keyboard-row air-keyboard-actions"><button onClick={() => pressVirtualKey(keyboardLayout === 'letters' ? '123' : 'ABC')}>{keyboardLayout === 'letters' ? '123' : 'ABC'}</button><button onClick={() => pressVirtualKey('Backspace')}>⌫</button><button onClick={() => pressVirtualKey('Space')}>Space</button><button onClick={() => pressVirtualKey('Enter')}>Enter ↵</button></div></section>}
       <div ref={cursorRef} className="air-hand-cursor"><span /><i /></div>
       <div className="air-os-corner">{cameraEnabled ? 'PINCH A WINDOW TITLE TO MOVE' : 'DRAG WINDOW TITLES · CAMERA OPTIONAL'} <span>·</span> PRIVATE SESSION</div>
     </div>
