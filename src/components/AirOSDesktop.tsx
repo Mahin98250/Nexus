@@ -74,8 +74,9 @@ export default function AirOSDesktop({ inputRef, cameraEnabled, onSwitchExperien
   windowsRef.current = windows;
 
   const moveWindow = (id: WindowId, x: number, y: number) => {
+    const compact = typeof window !== 'undefined' && window.matchMedia('(max-width: 700px)').matches;
     setWindows((current) => current.map((item) => item.id === id
-      ? { ...item, x: clamp(x, 0, 78), y: clamp(y, 0, 70) }
+      ? { ...item, x: clamp(x, compact ? 1 : 0, compact ? 4 : 78), y: clamp(y, 0, compact ? 62 : 70) }
       : item));
   };
 
@@ -93,6 +94,7 @@ export default function AirOSDesktop({ inputRef, cameraEnabled, onSwitchExperien
     }));
     setShowLauncher(false);
     setLauncherQuery('');
+    setKeyboardTarget(null);
   };
 
   const startPointerDrag = (event: ReactPointerEvent<HTMLElement>, id: WindowId) => {
@@ -223,6 +225,7 @@ export default function AirOSDesktop({ inputRef, cameraEnabled, onSwitchExperien
         setLauncherQuery('');
         setMaximizedWindow(null);
         setShowGestureGuide(false);
+        setKeyboardTarget(null);
         return;
       }
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
@@ -406,7 +409,7 @@ export default function AirOSDesktop({ inputRef, cameraEnabled, onSwitchExperien
         <button className="dock-app" onClick={() => { setMaximizedWindow(null); setWindows(initialWindows); }} aria-label="Reset workspace layout" title="Reset layout"><RotateCcw size={17} /><i /></button>
       </div>
 
-      {showLauncher && <div className="air-launcher" role="dialog" aria-label="AirOS app launcher"><div className="air-launcher-heading"><div><span>WORKSPACE · CTRL K</span><h3>What are we opening?</h3></div><button onClick={() => { setShowLauncher(false); setLauncherQuery(''); }} aria-label="Close launcher"><X size={16} /></button></div><label className="air-launcher-search"><Search size={16} /><input autoFocus value={launcherQuery} onChange={(event) => setLauncherQuery(event.target.value)} onFocus={() => { if (cameraRef.current) setKeyboardTarget('launcher'); }} placeholder="Search apps…" aria-label="Search apps" /></label><div className="air-launcher-grid">{(Object.keys(titles) as WindowId[]).filter((id) => titles[id].toLowerCase().includes(launcherQuery.toLowerCase())).map((id) => { const Icon = icons[id]; return <button key={id} onClick={() => openWindow(id)}><span><Icon size={21} /></span><strong>{titles[id]}</strong><small>{id === 'browser' ? 'Explore your workspace' : id === 'notes' ? 'Capture an idea' : id === 'terminal' ? 'Run safe demo commands' : 'Ambient focus audio'}</small></button>; })}{!(Object.keys(titles) as WindowId[]).some((id) => titles[id].toLowerCase().includes(launcherQuery.toLowerCase())) && <p className="air-launcher-empty">No apps match “{launcherQuery}”. Try Notes, Terminal or Browser.</p>}</div><div className="air-launcher-section-label">NEXUS EXPERIENCES</div><div className="air-launcher-grid air-launcher-modes">{modeIds.filter((id) => modeTitles[id].toLowerCase().includes(launcherQuery.toLowerCase())).map((id) => { const Icon = modeIcons[id]; return <button key={id} onClick={() => { setShowLauncher(false); setLauncherQuery(''); onSwitchExperience(id); }}><span><Icon size={21} /></span><strong>{modeTitles[id]}</strong><small>{id === 'holodesk' ? '3D hand interaction' : id === 'shadowstrike' ? 'Body-controlled game' : id === 'airos' ? 'Return to desktop' : 'Live object detection'}</small></button>; })}</div><div className="air-launcher-foot"><ShieldCheck size={13} /> Runs locally in this browser <span>ESC to close</span></div></div>}
+      {showLauncher && <div className="air-launcher" role="dialog" aria-label="AirOS app launcher"><div className="air-launcher-heading"><div><span>WORKSPACE · CTRL K</span><h3>What are we opening?</h3></div><button onClick={() => { setShowLauncher(false); setLauncherQuery(''); }} aria-label="Close launcher"><X size={16} /></button></div><label className="air-launcher-search"><Search size={16} /><input autoFocus value={launcherQuery} onChange={(event) => setLauncherQuery(event.target.value)} onFocus={() => { if (cameraRef.current) setKeyboardTarget('launcher'); }} placeholder="Search apps…" aria-label="Search apps" /></label><div className="air-launcher-grid">{(Object.keys(titles) as WindowId[]).filter((id) => titles[id].toLowerCase().includes(launcherQuery.toLowerCase())).map((id) => { const Icon = icons[id]; return <button key={id} onClick={() => openWindow(id)}><span><Icon size={21} /></span><strong>{titles[id]}</strong><small>{id === 'browser' ? 'Explore your workspace' : id === 'notes' ? 'Capture an idea' : id === 'terminal' ? 'Run safe demo commands' : 'Ambient focus audio'}</small></button>; })}{!(Object.keys(titles) as WindowId[]).some((id) => titles[id].toLowerCase().includes(launcherQuery.toLowerCase())) && !modeIds.some((id) => modeTitles[id].toLowerCase().includes(launcherQuery.toLowerCase())) && <p className="air-launcher-empty">No apps match “{launcherQuery}”. Try Notes, Terminal or HoloDesk.</p>}</div><div className="air-launcher-section-label">NEXUS EXPERIENCES</div><div className="air-launcher-grid air-launcher-modes">{modeIds.filter((id) => modeTitles[id].toLowerCase().includes(launcherQuery.toLowerCase())).map((id) => { const Icon = modeIcons[id]; return <button key={id} onClick={() => { setShowLauncher(false); setLauncherQuery(''); onSwitchExperience(id); }}><span><Icon size={21} /></span><strong>{modeTitles[id]}</strong><small>{id === 'holodesk' ? '3D hand interaction' : id === 'shadowstrike' ? 'Body-controlled game' : id === 'airos' ? 'Return to desktop' : 'Live object detection'}</small></button>; })}</div><div className="air-launcher-foot"><ShieldCheck size={13} /> Runs locally in this browser <span>ESC to close</span></div></div>}
       {keyboardTarget && cameraEnabled && <section className="air-gesture-keyboard" role="dialog" aria-label="On-screen gesture keyboard"><header><span><CircleHelp size={13} /> GESTURE KEYBOARD · {keyboardTarget.toUpperCase()}</span><button onClick={() => setKeyboardTarget(null)}>Done <X size={14} /></button></header>{keyboardRows.map((row) => <div className="air-keyboard-row" key={row}>{row.split('').map((key) => <button key={key} onClick={() => pressVirtualKey(key)}>{key}</button>)}</div>)}<div className="air-keyboard-row air-keyboard-actions"><button onClick={() => pressVirtualKey('Backspace')}>⌫</button><button onClick={() => pressVirtualKey('Space')}>Space</button><button onClick={() => pressVirtualKey('Enter')}>Enter ↵</button><button onClick={() => pressVirtualKey('Done')}>Done</button></div></section>}
       <div ref={cursorRef} className="air-hand-cursor"><span /><i /></div>
       <div className="air-os-corner">{cameraEnabled ? 'PINCH A WINDOW TITLE TO MOVE' : 'DRAG WINDOW TITLES · CAMERA OPTIONAL'} <span>·</span> PRIVATE SESSION</div>
