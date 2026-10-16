@@ -250,7 +250,7 @@ export default function App() {
         setCameraStarting(false);
         setCameraOn(true);
         setCameraStatus('Camera connected · starting object detector…');
-        let monitorLastFrame = 0;
+        let monitorLastFrame = performance.now();
         let monitorFrames = 0;
         let lastMonitorVideoTime = -1;
         const monitor = (now: number) => {
@@ -427,7 +427,10 @@ export default function App() {
       setCameraOn(true);
       setCameraStatus('Vision engine online');
       lastVisionFrameRef.current = 0;
+      lastFrameRef.current = performance.now();
+      frameCountRef.current = 0;
       lastVideoTimeRef.current = -1;
+      latestHandLandmarksRef.current = undefined;
       gestureStabilizerRef.current.reset();
       lastHandCountRef.current = -1;
       let consecutiveInferenceErrors = 0;
