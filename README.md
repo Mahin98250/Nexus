@@ -19,6 +19,7 @@ npm run dev
 Run checks:
 ```bash
 npm run typecheck
+npm run test
 npm run build
 ```
 
@@ -26,3 +27,7 @@ Camera features require HTTPS (or localhost) and explicit browser permission. Ne
 
 ## Current milestone
 The initial shell includes the four experience launchers, responsive navigation, an experience workspace, camera permission handling, and the shared vision-engine foundation. Individual experiences are being built incrementally; interface previews should not be mistaken for fully implemented OS-wide control or production-grade object recognition.
+
+## HoloDesk input
+
+The first spatial prototype renders a Three.js hologram and supports mouse/touch dragging without camera access. When the camera is enabled, MediaPipe hand landmarks are converted to a normalized input signal; hold a thumb-index pinch to move the hologram. GPU inference is attempted first, with CPU fallback where available.
