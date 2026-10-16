@@ -120,6 +120,7 @@ export default function App() {
   const frameRef = useRef<number | null>(null);
   const cameraSessionRef = useRef(0);
   const cameraStartingRef = useRef(false);
+  const restartCameraAfterExperienceSwitchRef = useRef(false);
   const lastFrameRef = useRef(0);
   const lastVisionFrameRef = useRef(0);
   const frameCountRef = useRef(0);
@@ -597,6 +598,14 @@ export default function App() {
     }
   }, [active]);
 
+  useEffect(() => {
+    if (!active || !restartCameraAfterExperienceSwitchRef.current) return;
+    restartCameraAfterExperienceSwitchRef.current = false;
+    // Wait until React has mounted the new experience's video element.
+    const frame = window.requestAnimationFrame(() => { void startCamera(); });
+    return () => window.cancelAnimationFrame(frame);
+  }, [active, startCamera]);
+
   useEffect(() => () => {
     cameraSessionRef.current += 1;
     if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
@@ -607,6 +616,10 @@ export default function App() {
   }, []);
 
   const openExperience = (id: ExperienceId) => {
+    // A gesture-selected experience is part of the current opted-in session.
+    // Restart the camera/model for the new experience instead of forcing a touch
+    // tap on "Enable camera" after every hand-controlled switch.
+    restartCameraAfterExperienceSwitchRef.current = cameraOn;
     stopCamera();
     setActive(id);
   };
