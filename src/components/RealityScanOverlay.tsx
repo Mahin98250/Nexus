@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
 import type { ObjectDetector } from '@mediapipe/tasks-vision';
 import { updateObjectTracks, type TrackedObject } from '../vision/objectTracks';
+import { EFFICIENTDET_LITE0_MODEL_CANDIDATES } from '../vision/objectDetectionModels';
 
 type Props = {
   active: boolean;
   videoRef: RefObject<HTMLVideoElement>;
+  onStatusChange: (status: string) => void;
 };
 
 // Match AirHand's tested browser runtime and WASM version exactly.
@@ -17,29 +19,35 @@ const visionWasmCandidates = [
   `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${mediaPipeRuntimeVersion}/wasm`,
   `https://unpkg.com/@mediapipe/tasks-vision@${mediaPipeRuntimeVersion}/wasm`,
 ];
-const objectModel = 'https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite0/float32/1/1.tflite';
-
-export default function RealityScanOverlay({ active, videoRef }: Props) {
+export default function RealityScanOverlay({ active, videoRef, onStatusChange }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const countRef = useRef<HTMLSpanElement>(null);
+  const inferenceFpsRef = useRef<HTMLSpanElement>(null);
   const [status, setStatus] = useState('Waiting for camera');
 
   useEffect(() => {
     if (!active) {
       setStatus('Waiting for camera');
+      onStatusChange('Waiting for camera');
       return;
     }
 
+    const reportStatus = (message: string) => {
+      setStatus(message);
+      onStatusChange(message);
+    };
     const canvas = canvasRef.current;
     const context = canvas?.getContext('2d');
     if (!canvas || !context) {
-      setStatus('Canvas is not available in this browser');
+      reportStatus('Canvas is not available in this browser');
       return;
     }
 
     let disposed = false;
     let frame = 0;
     let lastInference = 0;
+    let inferenceFrames = 0;
+    let inferenceWindowStart = 0;
     let detector: ObjectDetector | null = null;
     let detections: ReturnType<ObjectDetector['detectForVideo']>['detections'] = [];
     let tracks: TrackedObject[] = [];
@@ -69,6 +77,14 @@ export default function RealityScanOverlay({ active, videoRef }: Props) {
       if (now - lastInference > 80) {
         try {
           detections = detector?.detectForVideo(video, now).detections ?? [];
+          inferenceFrames += 1;
+          if (!inferenceWindowStart) inferenceWindowStart = now;
+          if (now - inferenceWindowStart >= 1000) {
+            if (inferenceFpsRef.current) inferenceFpsRef.current.textContent =
+              Math.round(inferenceFrames * 1000 / (now - inferenceWindowStart)) + ' INFER FPS';
+            inferenceFrames = 0;
+            inferenceWindowStart = now;
+          }
           const candidates = detections.flatMap((detection) => {
             const box = detection.boundingBox;
             if (!box) return [];
@@ -89,7 +105,7 @@ export default function RealityScanOverlay({ active, videoRef }: Props) {
             countRef.current.textContent = detections.length + (detections.length === 1 ? ' object' : ' objects') + ' · ' + update.visible.length + ' tracks';
           }
         } catch {
-          setStatus('Frame skipped — recovering camera feed');
+          reportStatus('Frame skipped · recovering object detector');
         }
         lastInference = now;
       }
@@ -138,7 +154,7 @@ export default function RealityScanOverlay({ active, videoRef }: Props) {
     };
 
     const initialize = async () => {
-      setStatus('Loading object model…');
+      reportStatus('Loading object model…');
       try {
         let mediaPipeModule: typeof import('@mediapipe/tasks-vision') | null = null;
         let bundleError: unknown = null;
@@ -174,29 +190,39 @@ export default function RealityScanOverlay({ active, videoRef }: Props) {
           scoreThreshold: 0.42,
           maxResults: 8,
         };
-        let loaded: ObjectDetector;
-        try {
-          loaded = await mediaPipeModule.ObjectDetector.createFromOptions(vision, {
-            ...options,
-            baseOptions: { modelAssetPath: objectModel, delegate: 'GPU' },
-          });
-        } catch {
-          loaded = await mediaPipeModule.ObjectDetector.createFromOptions(vision, {
-            ...options,
-            baseOptions: { modelAssetPath: objectModel, delegate: 'CPU' },
-          });
+        let loaded: ObjectDetector | null = null;
+        let modelError: unknown = null;
+        let loadedModelLabel = '';
+        for (const model of EFFICIENTDET_LITE0_MODEL_CANDIDATES) {
+          for (const delegate of ['GPU', 'CPU'] as const) {
+            try {
+              loaded = await mediaPipeModule.ObjectDetector.createFromOptions(vision, {
+                ...options,
+                baseOptions: { modelAssetPath: model.url, delegate },
+              });
+              loadedModelLabel = model.label;
+              break;
+            } catch (error) {
+              modelError = error;
+            }
+          }
+          if (loaded) break;
+        }
+        if (!loaded) {
+          const detail = modelError instanceof Error ? modelError.message : String(modelError ?? 'unknown model download error');
+          throw new Error('Could not download EfficientDet-Lite0 from Google Storage or the GitHub mirror. ' + detail.slice(0, 140));
         }
         if (disposed) {
           loaded.close();
           return;
         }
         detector = loaded;
-        setStatus('Live object detection · processed on-device');
+        reportStatus('Object detection ready · ' + loadedModelLabel);
         frame = requestAnimationFrame(drawDetections);
       } catch (error) {
         if (!disposed) {
           const detail = error instanceof Error ? error.message.replace(/\s+/g, ' ').slice(0, 100) : 'Unknown model error';
-          setStatus('Detector unavailable: ' + detail);
+          reportStatus('Detector unavailable: ' + detail);
         }
       }
     };
@@ -208,7 +234,7 @@ export default function RealityScanOverlay({ active, videoRef }: Props) {
       observer.disconnect();
       detector?.close();
     };
-  }, [active, videoRef]);
+  }, [active, videoRef, onStatusChange]);
 
   if (!active) return null;
 
@@ -221,7 +247,7 @@ export default function RealityScanOverlay({ active, videoRef }: Props) {
       </div>
       <div className="realityscan-bottomline">
         <span>{status}</span>
-        <span>LOCAL INFERENCE</span>
+        <span ref={inferenceFpsRef}>INFERENCE STARTING</span>
       </div>
     </div>
   );

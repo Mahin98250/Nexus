@@ -22,7 +22,13 @@ export default function HoloDeskScene({ inputRef, cameraEnabled }: HoloDeskScene
 
     let renderer: THREE.WebGLRenderer;
     try {
-      renderer = new THREE.WebGLRenderer({ alpha: true, antialias: false, powerPreference: 'default', failIfMajorPerformanceCaveat: false });
+      renderer = new THREE.WebGLRenderer({
+        alpha: true,
+        antialias: false,
+        powerPreference: 'high-performance',
+        failIfMajorPerformanceCaveat: false,
+        precision: 'mediump',
+      });
     } catch {
       setWebglUnavailable(true);
       host.classList.add('holo-scene-unavailable');
@@ -44,7 +50,13 @@ export default function HoloDeskScene({ inputRef, cameraEnabled }: HoloDeskScene
     };
     renderer.domElement.addEventListener('webglcontextlost', onWebGLContextLost);
 
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.25));
+    // Match AirHand's responsiveness target on touch devices: fewer rendered
+    // pixels and particles reduce GPU work while CSS keeps the scene full-size.
+    const lowPowerDevice = (navigator.hardwareConcurrency || 4) <= 4 ||
+      window.matchMedia('(pointer: coarse)').matches;
+    const particleCount = lowPowerDevice ? 72 : 150;
+    const curveSegments = lowPowerDevice ? 72 : 112;
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, lowPowerDevice ? 0.9 : 1.2));
     renderer.setSize(Math.max(host.clientWidth, 1), Math.max(host.clientHeight, 1));
     renderer.setClearColor(0x000000, 0);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -77,7 +89,7 @@ export default function HoloDeskScene({ inputRef, cameraEnabled }: HoloDeskScene
       opacity: 0.78,
       clearcoat: 0.8,
     });
-    const core = new THREE.Mesh(new THREE.IcosahedronGeometry(0.86, 2), coreMaterial);
+    const core = new THREE.Mesh(new THREE.IcosahedronGeometry(0.86, lowPowerDevice ? 1 : 2), coreMaterial);
     root.add(core);
 
     const wire = new THREE.Mesh(
@@ -93,7 +105,7 @@ export default function HoloDeskScene({ inputRef, cameraEnabled }: HoloDeskScene
     root.add(innerCore);
 
     const ringOne = new THREE.Mesh(
-      new THREE.TorusGeometry(1.3, 0.012, 8, 120),
+      new THREE.TorusGeometry(1.3, 0.012, 8, curveSegments),
       new THREE.MeshBasicMaterial({ color: 0x9c8dff, transparent: true, opacity: 0.8 }),
     );
     ringOne.rotation.x = 0.92;
@@ -101,14 +113,13 @@ export default function HoloDeskScene({ inputRef, cameraEnabled }: HoloDeskScene
     root.add(ringOne);
 
     const ringTwo = new THREE.Mesh(
-      new THREE.TorusGeometry(1.55, 0.006, 6, 120),
+      new THREE.TorusGeometry(1.55, 0.006, 6, curveSegments),
       new THREE.MeshBasicMaterial({ color: 0x5adbd7, transparent: true, opacity: 0.52 }),
     );
     ringTwo.rotation.x = 1.2;
     ringTwo.rotation.y = -0.5;
     root.add(ringTwo);
 
-    const particleCount = 180;
     const particlePositions = new Float32Array(particleCount * 3);
     for (let index = 0; index < particleCount; index += 1) {
       const radius = 1.8 + Math.random() * 2.3;
@@ -173,7 +184,14 @@ export default function HoloDeskScene({ inputRef, cameraEnabled }: HoloDeskScene
 
       const input = inputRef.current;
       if (cameraEnabledRef.current && input.detected && input.pinch) {
-        target.set((input.x - 0.5) * 5.3, (0.5 - input.y) * 3.0, 0);
+        // Use the exact same camera-frustum mapping as mouse/touch dragging.
+        // This removes the old hard-coded 5.3 × 3.0 scaling offset.
+        const halfHeight = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.position.z;
+        target.set(
+          (input.x - 0.5) * halfHeight * camera.aspect * 2,
+          (0.5 - input.y) * halfHeight * 2,
+          0,
+        );
         displayedPinch = true;
         const angleDiff = Math.atan2(Math.sin(input.angle - smoothedAngle), Math.cos(input.angle - smoothedAngle));
         smoothedAngle += angleDiff * 0.19;
@@ -188,7 +206,7 @@ export default function HoloDeskScene({ inputRef, cameraEnabled }: HoloDeskScene
         displayedPinch = false;
       }
 
-      root.position.lerp(target, 1 - Math.exp(-delta * (displayedPinch ? 13 : 3.2)));
+      root.position.lerp(target, 1 - Math.exp(-delta * (displayedPinch ? 19 : 3.2)));
       const timeSeconds = time * 0.001;
       root.rotation.y += delta * (displayedPinch ? 0.45 : 0.3);
       root.rotation.x = Math.sin(timeSeconds * 0.65) * 0.12 + smoothedAngle * (displayedPinch ? 0.22 : 0.05);
