@@ -62,8 +62,9 @@ describe('AirHand gesture and cursor primitives', () => {
     for (let i = 0; i < 25; i++) calibration.add(0.1 + (i % 5) * 0.18, 0.12 + Math.floor(i / 5) * 0.18);
     const bounds = calibration.finish();
     expect(bounds).not.toBeNull();
-    expect(validateCursorBounds(bounds!)).toBe(true);
-    expect(mapCalibratedCursor(bounds!.minX, bounds!.minY, bounds)).toEqual({ x: 0, y: 0 });
+    const validBounds = bounds!;
+    expect(validateCursorBounds(validBounds)).toBe(true);
+    expect(mapCalibratedCursor(validBounds.minX, validBounds.minY, validBounds)).toEqual({ x: 0, y: 0 });
     expect(mapCalibratedCursor(0.5, 0.5, { minX: 0.5, maxX: 0.5, minY: 0, maxY: 1 })).toBeNull();
   });
 });
