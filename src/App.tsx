@@ -377,10 +377,10 @@ export default function App() {
             <div className="camera-panel">
               <div className="panel-topline">
                 <span><span className={cameraOn ? 'status-dot active' : 'status-dot'} /> LIVE INPUT</span>
-                <span className="panel-topline-right">{cameraOn ? 'CAMERA CONNECTED' : 'AWAITING INPUT'}</span>
+                <span className="panel-topline-right">{cameraOn ? 'CAMERA CONNECTED' : cameraStarting ? 'STARTING CAMERA' : 'AWAITING INPUT'}</span>
               </div>
               <div className={'camera-stage ' + (cameraOn || cameraStarting ? 'camera-stage-live' : '') + (activeExperience.id === 'holodesk' ? ' is-holodesk' : '') + (activeExperience.id === 'shadowstrike' ? ' is-shadowstrike' : '') + (activeExperience.id === 'airos' ? ' is-airos' : '') + (activeExperience.id === 'realityscan' ? ' is-realityscan' : '')}>
-                <video ref={videoRef} className={cameraOn || cameraStarting ? 'camera-video visible' : 'camera-video'} autoPlay playsInline muted />
+                <video ref={videoRef} className={(cameraOn || cameraStarting ? 'camera-video visible' : 'camera-video') + (activeExperience.id === 'realityscan' ? ' realityscan-camera-video' : '')} autoPlay playsInline muted />
                 {!cameraOn && !cameraStarting && activeExperience.id !== 'shadowstrike' && activeExperience.id !== 'airos' && <div className="camera-placeholder">
                   <div className="camera-orbit"><div className="orbit-ring orbit-ring-one" /><div className="orbit-ring orbit-ring-two" /><div className="camera-symbol"><Camera size={28} /></div></div>
                   <h3>{activeExperience.id === 'holodesk' ? 'Touchless 3D is ready.' : 'Give Nexus a point of view.'}</h3>
@@ -399,8 +399,8 @@ export default function App() {
                 {activeExperience.id === 'realityscan' && <RealityScanOverlay active={cameraOn} videoRef={videoRef} />}
               </div>
               <div className="camera-footer">
-                <span className="camera-status"><span className={cameraOn ? 'status-dot active' : 'status-dot'} /> {cameraStatus}</span>
-                <span className="camera-fps">{cameraOn ? fps + ' FPS · ' + (activeExperience.id === 'shadowstrike' ? (bodyInputRef.current.detected ? 'body tracked' : 'find full body') : activeExperience.id === 'realityscan' ? 'object detector' : handCount + ' hands') : 'NO SIGNAL'}</span>
+                <span className="camera-status"><span className={cameraOn || cameraStarting ? 'status-dot active' : 'status-dot'} /> {cameraStatus}</span>
+                <span className="camera-fps">{cameraOn || cameraStarting ? fps + ' FPS · ' + (activeExperience.id === 'shadowstrike' ? (bodyInputRef.current.detected ? 'body tracked' : 'find full body') : activeExperience.id === 'realityscan' ? 'object detector' : handCount + ' hands') : 'NO SIGNAL'}</span>
               </div>
             </div>
             <aside className="inspector">
@@ -411,7 +411,7 @@ export default function App() {
               </div>
               <div className="inspector-section">
                 <span className="field-label">VISION ENGINE</span>
-                <div className="metric-row"><span>Camera</span><span className={cameraOn ? 'metric-value online' : 'metric-value'}>{cameraOn ? 'Connected' : 'Standby'}</span></div>
+                <div className="metric-row"><span>Camera</span><span className={cameraOn ? 'metric-value online' : 'metric-value'}>{cameraOn ? 'Connected' : cameraStarting ? 'Starting…' : 'Standby'}</span></div>
                 <div className="metric-row"><span>{activeExperience.id === 'shadowstrike' ? 'Body pose' : activeExperience.id === 'realityscan' ? 'Object model' : 'Hand landmarks'}</span><span className="metric-value">{cameraOn ? (activeExperience.id === 'shadowstrike' ? (bodyInputRef.current.detected ? 'Detected' : 'Searching') : activeExperience.id === 'realityscan' ? 'Loading / active' : handCount + ' detected') : 'Waiting'}</span></div>
                 <div className="metric-row"><span>Frame rate</span><span className="metric-value">{cameraOn ? fps + ' FPS' : '—'}</span></div>
                 <div className="metric-row"><span>Processing</span><span className="metric-value">On-device</span></div>
