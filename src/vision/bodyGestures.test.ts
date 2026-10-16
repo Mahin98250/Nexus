@@ -41,4 +41,20 @@ describe('deriveBodyInput', () => {
     expect(input.x).toBeGreaterThan(0.5);
     expect(input.jump).toBe(true);
   });
+  it('rejects an unreliable upper-body pose instead of steering on noise', () => {
+    const input = deriveBodyInput(pose({ 11: { visibility: 0.1 } }), 40);
+    expect(input.detected).toBe(false);
+    expect(input.attack).toBe(false);
+    expect(input.jump).toBe(false);
+  });
+
+  it('does not infer a jump when ankle landmarks are low confidence', () => {
+    const input = deriveBodyInput(pose({
+      23: { y: 0.4 }, 24: { y: 0.4 },
+      27: { y: 0.45, visibility: 0.1 }, 28: { y: 0.45, visibility: 0.1 },
+    }), 50);
+    expect(input.detected).toBe(true);
+    expect(input.jump).toBe(false);
+  });
+
 });
