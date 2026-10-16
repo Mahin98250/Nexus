@@ -131,7 +131,12 @@ export default function RealityScanOverlay({ active, videoRef }: Props) {
     const initialize = async () => {
       setStatus('Loading object model…');
       try {
-        const vision = await FilesetResolver.forVisionTasks(visionWasm);
+        let vision: Awaited<ReturnType<typeof FilesetResolver.forVisionTasks>>;
+        try {
+          vision = await FilesetResolver.forVisionTasks(visionWasm);
+        } catch {
+          vision = await FilesetResolver.forVisionTasks('https://unpkg.com/@mediapipe/tasks-vision@0.10.22/wasm');
+        }
         const options = {
           runningMode: 'VIDEO' as const,
           scoreThreshold: 0.42,
@@ -156,8 +161,11 @@ export default function RealityScanOverlay({ active, videoRef }: Props) {
         detector = loaded;
         setStatus('Live object detection · processed on-device');
         frame = requestAnimationFrame(drawDetections);
-      } catch {
-        if (!disposed) setStatus('Detector unavailable. Stop and restart the camera to retry.');
+      } catch (error) {
+        if (!disposed) {
+          const detail = error instanceof Error ? error.message.replace(/\\s+/g, ' ').slice(0, 100) : 'Unknown model error';
+          setStatus('Detector unavailable: ' + detail);
+        }
       }
     };
 
