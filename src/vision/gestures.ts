@@ -20,17 +20,18 @@ export function deriveHandInput(
   const middleMcp = landmarks[9];
   const pinkyMcp = landmarks[17];
   const palmScale = Math.max(distance2D(wrist, middleMcp), 0.001);
-  const palmPoints = [0, 5, 9, 13, 17];
-  const centerX = palmPoints.reduce((sum, index) => sum + landmarks[index].x, 0) / palmPoints.length;
-  const centerY = palmPoints.reduce((sum, index) => sum + landmarks[index].y, 0) / palmPoints.length;
+  // AirHand maps the cursor from the index fingertip, not the palm center.
+  // This puts the interaction point where the user is pointing and removes the
+  // large positional offset that made HoloDesk feel inaccurate.
+  const indexTip = landmarks[8];
   const fingerSpread = [8, 12, 16, 20]
     .reduce((sum, index) => sum + distance2D(wrist, landmarks[index]), 0) / 4 / palmScale;
   const gesture = detectAirHandGesture(landmarks, previousPinch, modelCategory, modelScore);
 
   return {
     detected: true,
-    x: clamp(1 - centerX, 0, 1),
-    y: clamp(centerY, 0, 1),
+    x: clamp(1 - indexTip.x, 0, 1),
+    y: clamp(indexTip.y, 0, 1),
     // Use AirHand's palm-normalized pinch thresholds (0.28 press / 0.43 release).
     pinch: gesture.gesture === 'Pinch',
     openness: clamp((fingerSpread - 1.0) / 1.55, 0, 1),
