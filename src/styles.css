@@ -291,3 +291,6 @@
  .handsfree-home-toggle{min-height:42px;padding:10px 12px;font-size:11px}
  .handsfree-home-status{font-size:11px;width:100%}
 }
+
+.handsfree-home-status.is-warning{color:#e9bd8b;background:rgba(218,151,75,.07);border-color:rgba(218,151,75,.22)}
+.theme-light .handsfree-home-status.is-warning{color:#915a17;background:rgba(218,151,75,.08);border-color:rgba(145,90,23,.18)}
