@@ -114,10 +114,28 @@ export default function App() {
     try {
       // RealityScan prefers the rear camera; the other experiences use a mirrored selfie view.
       const facingMode = active === 'realityscan' ? 'environment' : 'user';
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: false,
-        video: { facingMode: { ideal: facingMode }, width: { ideal: 1280 }, height: { ideal: 720 } },
-      });
+      // Try modest mobile-friendly constraints first, then progressively relax them.
+      // Some Android browsers reject a resolution/facing-mode combination even when
+      // the camera itself is available.
+      const videoRequests: MediaStreamConstraints[] = [
+        { audio: false, video: { facingMode: { ideal: facingMode }, width: { ideal: 640 }, height: { ideal: 480 } } },
+        { audio: false, video: { facingMode: { ideal: facingMode } } },
+        { audio: false, video: true },
+      ];
+      let stream: MediaStream | null = null;
+      let cameraRequestError: unknown = null;
+      for (const constraints of videoRequests) {
+        try {
+          stream = await navigator.mediaDevices.getUserMedia(constraints);
+          break;
+        } catch (requestError) {
+          cameraRequestError = requestError;
+          const name = requestError instanceof DOMException ? requestError.name : '';
+          // Permission/security failures cannot be repaired by changing constraints.
+          if (name === 'NotAllowedError' || name === 'SecurityError') throw requestError;
+        }
+      }
+      if (!stream) throw cameraRequestError ?? new Error('No camera stream was returned by the browser.');
       requestedStream = stream;
       if (sessionId !== cameraSessionRef.current) {
         stream.getTracks().forEach((track) => track.stop());
@@ -130,8 +148,27 @@ export default function App() {
         setCameraStatus('Camera view is not ready. Try again.');
         return;
       }
-      videoRef.current.srcObject = stream;
-      await videoRef.current.play();
+      const video = videoRef.current;
+      video.muted = true;
+      video.playsInline = true;
+      video.srcObject = stream;
+      // Wait briefly for metadata before play; mobile browsers often expose the
+      // MediaStream before the video element has a usable frame size.
+      if (video.readyState < HTMLMediaElement.HAVE_METADATA) {
+        await new Promise<void>((resolve, reject) => {
+          const timeout = window.setTimeout(() => reject(new Error('Camera connected but video metadata did not arrive. Try reopening the camera.')), 8000);
+          const cleanup = () => {
+            window.clearTimeout(timeout);
+            video.removeEventListener('loadedmetadata', onReady);
+            video.removeEventListener('error', onError);
+          };
+          const onReady = () => { cleanup(); resolve(); };
+          const onError = () => { cleanup(); reject(new Error('The browser could not read video from the selected camera.')); };
+          video.addEventListener('loadedmetadata', onReady, { once: true });
+          video.addEventListener('error', onError, { once: true });
+        });
+      }
+      await video.play();
       if (sessionId !== cameraSessionRef.current) {
         stream.getTracks().forEach((track) => track.stop());
         return;
@@ -305,12 +342,22 @@ export default function App() {
       cameraStartingRef.current = false;
       setCameraStarting(false);
       setCameraOn(false);
-      const message = error instanceof Error ? error.message : 'Camera could not start.';
-      if (message.toLowerCase().includes('permission') || message.toLowerCase().includes('denied')) {
-        setCameraStatus('Camera permission was denied. Allow camera access in your browser settings.');
+      const errorName = error instanceof DOMException ? error.name : '';
+      const message = error instanceof Error ? error.message : String(error || 'Unknown camera error');
+      const normalized = `${errorName} ${message}`.toLowerCase();
+      if (normalized.includes('notallowed') || normalized.includes('permission') || normalized.includes('denied') || normalized.includes('securityerror')) {
+        setCameraStatus('Camera access blocked. In Chrome, open Site settings → Camera, allow access, then reload Nexus.');
+      } else if (normalized.includes('notfound') || normalized.includes('devicesnotfound')) {
+        setCameraStatus('No camera was found. Close other camera apps and try again.');
+      } else if (normalized.includes('notreadable') || normalized.includes('trackstart')) {
+        setCameraStatus('Camera is busy or unavailable. Close other camera apps, then retry.');
+      } else if (normalized.includes('overconstrained')) {
+        setCameraStatus('Camera rejected its settings. Retry to use simpler camera settings.');
+      } else if (normalized.includes('insecure') || normalized.includes('secure context')) {
+        setCameraStatus('Camera requires HTTPS. Open the official https://mahin98250.github.io/Nexus/ address.');
       } else {
-        const detail = message.replace(/\s+/g, ' ').slice(0, 110);
-        setCameraStatus('Could not start vision engine: ' + detail);
+        const detail = `${errorName ? errorName + ': ' : ''}${message}`.replace(/\s+/g, ' ').slice(0, 135);
+        setCameraStatus('Camera startup failed — ' + detail);
       }
     }
   }, [active]);
