@@ -265,3 +265,16 @@
  .air-gesture-keyboard{bottom:56px}
  .air-keyboard-row>button{height:33px;font-size:11px}
 }
+
+
+/* Viewport-level hand pointer for HoloDesk and RealityScan workspace chrome. */
+.global-gesture-cursor{position:fixed;z-index:90;left:50vw;top:50vh;width:27px;height:27px;transform:translate(-50%,-50%);pointer-events:none;visibility:hidden;border:1.5px solid rgba(128,242,218,.96);border-radius:50%;background:rgba(80,218,192,.07);box-shadow:0 0 0 5px rgba(80,218,192,.09),0 0 22px rgba(80,218,192,.5);transition:width .1s,height .1s,border-color .1s,box-shadow .1s}
+.global-gesture-cursor>span{position:absolute;left:50%;top:50%;width:4px;height:4px;transform:translate(-50%,-50%);border-radius:50%;background:#d8fff5;box-shadow:0 0 9px rgba(128,242,218,.9)}
+.global-gesture-cursor>i{position:absolute;inset:-5px;border:1px dashed rgba(128,242,218,.6);border-radius:50%;animation:global-gesture-orbit 7s linear infinite}
+.global-gesture-pinching{width:18px;height:18px;border-color:#b8adff;background:rgba(154,139,255,.18);box-shadow:0 0 0 5px rgba(154,139,255,.15),0 0 24px rgba(154,139,255,.7)}
+.global-gesture-pinching>span{background:#f2edff}
+.global-gesture-pinching>i{border-color:rgba(184,173,255,.8);inset:-3px}
+.global-gesture-hover{outline:2px solid rgba(86,219,188,.64)!important;outline-offset:3px!important;box-shadow:0 0 0 5px rgba(86,219,188,.1),0 0 20px rgba(86,219,188,.14)!important}
+.theme-light .global-gesture-hover{outline-color:rgba(35,155,136,.72)!important;box-shadow:0 0 0 5px rgba(35,155,136,.09),0 0 20px rgba(35,155,136,.1)!important}
+@keyframes global-gesture-orbit{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.global-gesture-cursor>i{animation:none}}

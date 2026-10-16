@@ -13,6 +13,7 @@ import { deriveHandInput } from './vision/gestures';
 import { deriveBodyInput } from './vision/bodyGestures';
 import { AirHandGestureStabilizer, type AirHandGesture } from './vision/airHandEngine';
 import { getRuntimeErrorDetails } from './vision/runtimeErrors';
+import { clampGesturePointer, shouldActivateGestureTarget } from './vision/gestureNavigation';
 import { EMPTY_BODY_INPUT, EMPTY_HAND_INPUT, type BodyInput, type HandInput, type Landmark } from './vision/types';
 
 function getAirHandFrameGuidance(landmarks: readonly Landmark[] | undefined): string {
@@ -107,6 +108,9 @@ export default function App() {
     catch { return 'dark'; }
   });
   const handInputRef = useRef<HandInput>({ ...EMPTY_HAND_INPUT });
+  const globalGestureCursorRef = useRef<HTMLDivElement>(null);
+  const globalHoveredElementRef = useRef<HTMLElement | null>(null);
+  const globalPinchDownRef = useRef(false);
   const bodyInputRef = useRef<BodyInput>({ ...EMPTY_BODY_INPUT });
   const videoRef = useRef<HTMLVideoElement>(null);
   const gestureRecognizerRef = useRef<GestureRecognizer | null>(null);
@@ -129,6 +133,67 @@ export default function App() {
   useEffect(() => {
     try { localStorage.setItem('nexus-theme', theme); } catch { /* storage may be unavailable */ }
   }, [theme]);
+
+  useEffect(() => {
+    const cursor = globalGestureCursorRef.current;
+    if (!cursor) return;
+    let frame = 0;
+    const clearHover = () => {
+      globalHoveredElementRef.current?.classList.remove('global-gesture-hover');
+      globalHoveredElementRef.current = null;
+    };
+    const tick = () => {
+      const hand = handInputRef.current;
+      // AirOS owns its internal cursor and window gestures. ShadowStrike uses
+      // full-body controls, so avoid competing with its hand/body camera pipeline.
+      const enabled = cameraOn && active !== null && active !== 'airos' && active !== 'shadowstrike';
+      if (!enabled || !hand.detected) {
+        cursor.style.visibility = 'hidden';
+        clearHover();
+        globalPinchDownRef.current = false;
+        if (enabled) frame = requestAnimationFrame(tick);
+        return;
+      }
+      const x = clampGesturePointer(hand.x);
+      const y = clampGesturePointer(hand.y);
+      cursor.style.visibility = 'visible';
+      cursor.style.left = (x * 100) + 'vw';
+      cursor.style.top = (y * 100) + 'vh';
+      cursor.classList.toggle('global-gesture-pinching', hand.pinch);
+      const hit = document.elementFromPoint(x * window.innerWidth, y * window.innerHeight) as HTMLElement | null;
+      const target = hit?.closest<HTMLElement>('.app-shell button:not(:disabled), .app-shell [role="button"], .app-shell a[href]') ?? null;
+      if (target && target.closest('.air-os-layer')) {
+        // AirOS is deliberately excluded here; its own gesture controller handles it.
+        clearHover();
+      } else {
+        if (target !== globalHoveredElementRef.current) {
+          clearHover();
+          target?.classList.add('global-gesture-hover');
+          globalHoveredElementRef.current = target;
+        }
+        if (shouldActivateGestureTarget(hand.detected, hand.pinch, globalPinchDownRef.current) && target) {
+          target.click();
+        }
+      }
+      globalPinchDownRef.current = hand.pinch;
+      frame = requestAnimationFrame(tick);
+    };
+    if (cameraOn && active && active !== 'airos' && active !== 'shadowstrike') {
+      frame = requestAnimationFrame(tick);
+    } else {
+      cursor.style.visibility = 'hidden';
+      clearHover();
+      globalPinchDownRef.current = false;
+    }
+    return () => {
+      cancelAnimationFrame(frame);
+      clearHover();
+      cursor.style.visibility = 'hidden';
+      globalPinchDownRef.current = false;
+    };
+  }, [active, cameraOn]);
+
+
 
   const stopCamera = useCallback(() => {
     cameraSessionRef.current += 1;
@@ -760,7 +825,8 @@ export default function App() {
         </section>
       )}
 
-      {showHelp && <div className="modal-backdrop" role="presentation" onClick={() => setShowHelp(false)}><section className="help-modal" role="dialog" aria-modal="true" aria-labelledby="help-title" onClick={(event) => event.stopPropagation()}><button className="modal-close" onClick={() => setShowHelp(false)} aria-label="Close help"><X size={18} /></button><div className="modal-icon"><CircleHelp size={22} /></div><div className="eyebrow">QUICK GUIDE</div><h2 id="help-title">Welcome to Nexus.</h2><p>Nexus is an experimental playground for camera-based interaction. Choose an experience to enter its workspace, then enable the camera to test the shared tracking engine. Switch between light and dark themes using the sun/moon button in the top bar.</p><div className="help-list"><div><Camera size={16} /><span><strong>Camera access</strong><small>Requested only when you press Enable camera. Use HTTPS or localhost.</small></span></div><div><ShieldCheck size={16} /><span><strong>Privacy</strong><small>Video is processed in your browser and is not uploaded by this app.</small></span></div><div><Maximize2 size={16} /><span><strong>Good tracking</strong><small>Use bright, even light and keep your hand fully visible.</small></span></div><div><Hand size={16} /><span><strong>HoloDesk & AirOS</strong><small>Move your hand to move the cursor. Pinch thumb and index finger to grab the HoloDesk object or an AirOS window title; release to drop it.</small></span></div><div><Target size={16} /><span><strong>ShadowStrike</strong><small>Move your body to steer, raise a hand to strike, and jump to dodge. Keep your full body in view.</small></span></div><div><ScanLine size={16} /><span><strong>RealityScan Live</strong><small>Point the camera at everyday objects. This experience detects objects rather than using hand gestures to operate every control.</small></span></div></div><button className="button button-primary modal-done" onClick={() => setShowHelp(false)}>Got it <Check size={16} /></button></section></div>}
+      <div ref={globalGestureCursorRef} className="global-gesture-cursor" aria-hidden="true"><span /><i /></div>
+      {showHelp && <div className="modal-backdrop" role="presentation" onClick={() => setShowHelp(false)}><section className="help-modal" role="dialog" aria-modal="true" aria-labelledby="help-title" onClick={(event) => event.stopPropagation()}><button className="modal-close" onClick={() => setShowHelp(false)} aria-label="Close help"><X size={18} /></button><div className="modal-icon"><CircleHelp size={22} /></div><div className="eyebrow">QUICK GUIDE</div><h2 id="help-title">Welcome to Nexus.</h2><p>Nexus is an experimental playground for camera-based interaction. Choose an experience to enter its workspace, then enable the camera to test the shared tracking engine. Switch between light and dark themes using the sun/moon button in the top bar.</p><div className="help-list"><div><Camera size={16} /><span><strong>Camera access</strong><small>Requested only when you press Enable camera. Use HTTPS or localhost.</small></span></div><div><ShieldCheck size={16} /><span><strong>Privacy</strong><small>Video is processed in your browser and is not uploaded by this app.</small></span></div><div><Maximize2 size={16} /><span><strong>Good tracking</strong><small>Use bright, even light and keep your hand fully visible.</small></span></div><div><Hand size={16} /><span><strong>HoloDesk & AirOS</strong><small>In HoloDesk and RealityScan, move your hand to move the on-screen reticle; a highlighted button can be activated with one pinch. In HoloDesk, pinch over the hologram to grab it. In AirOS, pinch any highlighted button to activate it or pinch and hold a window title to move the window. Release fully before the next click.</small></span></div><div><Target size={16} /><span><strong>ShadowStrike</strong><small>Move your body to steer, raise a hand to strike, and jump to dodge. Keep your full body in view.</small></span></div><div><ScanLine size={16} /><span><strong>RealityScan Live</strong><small>Point the camera at everyday objects. Use the hand reticle to pinch visible Nexus controls; the object detector itself labels items in the camera view.</small></span></div></div><button className="button button-primary modal-done" onClick={() => setShowHelp(false)}>Got it <Check size={16} /></button></section></div>}
     </main>
   );
 }
