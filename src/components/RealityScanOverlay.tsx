@@ -163,7 +163,7 @@ export default function RealityScanOverlay({ active, videoRef }: Props) {
         frame = requestAnimationFrame(drawDetections);
       } catch (error) {
         if (!disposed) {
-          const detail = error instanceof Error ? error.message.replace(/\\s+/g, ' ').slice(0, 100) : 'Unknown model error';
+          const detail = error instanceof Error ? error.message.replace(/\s+/g, ' ').slice(0, 100) : 'Unknown model error';
           setStatus('Detector unavailable: ' + detail);
         }
       }
