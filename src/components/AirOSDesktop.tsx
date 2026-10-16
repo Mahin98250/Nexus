@@ -4,6 +4,7 @@ import {
   Music2, Search, ShieldCheck, TerminalSquare, Wifi, X,
 } from 'lucide-react';
 import type { HandInputRef } from '../vision/types';
+import { AirHandCursorSmoother } from '../vision/airHandEngine';
 
 type WindowId = 'browser' | 'notes' | 'terminal' | 'music';
 type AirWindow = { id: WindowId; x: number; y: number; z: number; minimized: boolean; closed: boolean };
@@ -29,7 +30,7 @@ export default function AirOSDesktop({ inputRef, cameraEnabled }: Props) {
   const dragRef = useRef<DragState | null>(null);
   const lastPinchRef = useRef(false);
   const lastGesturePositionRef = useRef({ x: Number.NaN, y: Number.NaN });
-  const smoothedHandPositionRef = useRef({ x: 0.5, y: 0.5, initialized: false });
+  const smoothedHandPositionRef = useRef(new AirHandCursorSmoother());
   const cameraRef = useRef(cameraEnabled);
   const windowsRef = useRef(initialWindows);
   const topZRef = useRef(5);
@@ -187,15 +188,7 @@ export default function AirOSDesktop({ inputRef, cameraEnabled }: Props) {
       const detected = Boolean(hand?.detected);
       cursor.style.visibility = detected ? 'visible' : 'hidden';
       if (detected && hand) {
-        const smooth = smoothedHandPositionRef.current;
-        if (!smooth.initialized) {
-          smooth.x = hand.x;
-          smooth.y = hand.y;
-          smooth.initialized = true;
-        } else {
-          smooth.x += (hand.x - smooth.x) * 0.32;
-          smooth.y += (hand.y - smooth.y) * 0.32;
-        }
+        const smooth = smoothedHandPositionRef.current.update(hand.x, hand.y, performance.now());
         cursor.style.left = (smooth.x * 100) + '%';
         cursor.style.top = (smooth.y * 100) + '%';
         cursor.classList.toggle('air-cursor-pinching', hand.pinch);
