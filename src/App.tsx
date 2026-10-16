@@ -11,6 +11,7 @@ import RealityScanOverlay from './components/RealityScanOverlay';
 import HoloDeskScene from './components/HoloDeskScene';
 import { deriveHandInput } from './vision/gestures';
 import { deriveBodyInput } from './vision/bodyGestures';
+import { getRuntimeErrorDetails } from './vision/runtimeErrors';
 import { EMPTY_BODY_INPUT, EMPTY_HAND_INPUT, type BodyInput, type HandInput } from './vision/types';
 
 type ExperienceId = 'holodesk' | 'shadowstrike' | 'airos' | 'realityscan';
@@ -110,14 +111,33 @@ export default function App() {
     cameraStartingRef.current = true;
     setCameraStarting(true);
     let requestedStream: MediaStream | null = null;
+    let streamAttached = false;
     setCameraStatus('Requesting camera permission…');
     try {
       // RealityScan prefers the rear camera; the other experiences use a mirrored selfie view.
       const facingMode = active === 'realityscan' ? 'environment' : 'user';
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: false,
-        video: { facingMode: { ideal: facingMode }, width: { ideal: 1280 }, height: { ideal: 720 } },
-      });
+      // Try modest mobile-friendly constraints first, then progressively relax them.
+      // Some Android browsers reject a resolution/facing-mode combination even when
+      // the camera itself is available.
+      const videoRequests: MediaStreamConstraints[] = [
+        { audio: false, video: { facingMode: { ideal: facingMode }, width: { ideal: 640 }, height: { ideal: 480 } } },
+        { audio: false, video: { facingMode: { ideal: facingMode } } },
+        { audio: false, video: true },
+      ];
+      let stream: MediaStream | null = null;
+      let cameraRequestError: unknown = null;
+      for (const constraints of videoRequests) {
+        try {
+          stream = await navigator.mediaDevices.getUserMedia(constraints);
+          break;
+        } catch (requestError) {
+          cameraRequestError = requestError;
+          const { name } = getRuntimeErrorDetails(requestError);
+          // Permission/security failures cannot be repaired by changing constraints.
+          if (['notallowederror', 'securityerror', 'permissiondeniederror'].includes(name.toLowerCase())) throw requestError;
+        }
+      }
+      if (!stream) throw cameraRequestError ?? new Error('No camera stream was returned by the browser.');
       requestedStream = stream;
       if (sessionId !== cameraSessionRef.current) {
         stream.getTracks().forEach((track) => track.stop());
@@ -127,15 +147,55 @@ export default function App() {
       if (!videoRef.current) {
         stream.getTracks().forEach((track) => track.stop());
         streamRef.current = null;
-        setCameraStatus('Camera view is not ready. Try again.');
+        cameraStartingRef.current = false;
+        setCameraStarting(false);
+        setCameraOn(false);
+        setCameraStatus('Camera view is not ready. Leave this experience and open it again.');
         return;
       }
-      videoRef.current.srcObject = stream;
-      await videoRef.current.play();
+      const video = videoRef.current;
+      video.muted = true;
+      video.playsInline = true;
+      video.srcObject = stream;
+      // Wait briefly for metadata before play; mobile browsers often expose the
+      // MediaStream before the video element has a usable frame size.
+      if (video.readyState < HTMLMediaElement.HAVE_METADATA) {
+        await new Promise<void>((resolve, reject) => {
+          let timeout = 0;
+          const cleanup = () => {
+            window.clearTimeout(timeout);
+            video.removeEventListener('loadedmetadata', onReady);
+            video.removeEventListener('error', onError);
+          };
+          const onReady = () => { cleanup(); resolve(); };
+          const onError = () => { cleanup(); reject(new Error('The browser could not read video from the selected camera.')); };
+          timeout = window.setTimeout(() => {
+            cleanup();
+            reject(new Error('Camera connected but video metadata did not arrive within 8 seconds. Try reopening the camera.'));
+          }, 8000);
+          video.addEventListener('loadedmetadata', onReady, { once: true });
+          video.addEventListener('error', onError, { once: true });
+          // Metadata may arrive between the outer readyState check and listener registration.
+          if (video.readyState >= HTMLMediaElement.HAVE_METADATA) onReady();
+        });
+      }
+      await video.play();
       if (sessionId !== cameraSessionRef.current) {
         stream.getTracks().forEach((track) => track.stop());
         return;
       }
+      // A successful video stream is a camera success, independently of whether
+      // the separate MediaPipe tracking model can be downloaded and initialized.
+      streamAttached = true;
+      cameraStartingRef.current = false;
+      setCameraStarting(false);
+      setCameraOn(true);
+      setCameraStatus(active === 'shadowstrike'
+        ? 'Camera connected · loading body tracking…'
+        : active === 'realityscan'
+          ? 'Camera connected · starting object detector…'
+          : 'Camera connected · loading hand tracking…');
+
       // RealityScan owns its ObjectDetector. Avoid booting a second WASM runtime,
       // which wastes memory and can stall startup on mobile browsers.
       if (active === 'realityscan') {
@@ -293,9 +353,14 @@ export default function App() {
       };
       frameRef.current = requestAnimationFrame(loop);
     } catch (error) {
-      requestedStream?.getTracks().forEach((track) => track.stop());
+      if (!streamAttached) {
+        requestedStream?.getTracks().forEach((track) => track.stop());
+        streamRef.current = null;
+      } else if (requestedStream) {
+        // Keep a working camera preview alive when only the vision model failed.
+        streamRef.current = requestedStream;
+      }
       if (sessionId !== cameraSessionRef.current) return;
-      streamRef.current = null;
       handInputRef.current = { ...EMPTY_HAND_INPUT };
       landmarkerRef.current?.close();
       landmarkerRef.current = null;
@@ -304,13 +369,28 @@ export default function App() {
       bodyInputRef.current = { ...EMPTY_BODY_INPUT };
       cameraStartingRef.current = false;
       setCameraStarting(false);
-      setCameraOn(false);
-      const message = error instanceof Error ? error.message : 'Camera could not start.';
-      if (message.toLowerCase().includes('permission') || message.toLowerCase().includes('denied')) {
-        setCameraStatus('Camera permission was denied. Allow camera access in your browser settings.');
+      setCameraOn(streamAttached);
+
+      const { name: errorName, message } = getRuntimeErrorDetails(error);
+      const normalized = `${errorName} ${message}`.toLowerCase();
+      if (streamAttached) {
+        // The video stream is valid; keep it alive if only model initialization failed.
+        const trackingMode = active === 'shadowstrike' ? 'body tracking' : 'hand tracking';
+        const detail = `${errorName ? errorName + ': ' : ''}${message}`.replace(/\s+/g, ' ').slice(0, 135);
+        setCameraStatus(`Camera connected, but ${trackingMode} failed — ${detail}. Stop and retry to reload tracking.`);
+      } else if (normalized.includes('notallowed') || normalized.includes('permission') || normalized.includes('denied') || normalized.includes('securityerror')) {
+        setCameraStatus('Camera access blocked by the browser. Check Chrome Site settings → Camera, then reload Nexus.');
+      } else if (normalized.includes('notfound') || normalized.includes('devicesnotfound')) {
+        setCameraStatus('No camera was found. Close other camera apps and retry.');
+      } else if (normalized.includes('notreadable') || normalized.includes('trackstart')) {
+        setCameraStatus('Camera is busy or unavailable. Close other camera apps, then retry.');
+      } else if (normalized.includes('overconstrained')) {
+        setCameraStatus('The camera rejected its settings. The fallback settings also failed.');
+      } else if (normalized.includes('insecure') || normalized.includes('secure context')) {
+        setCameraStatus('Camera requires HTTPS. Open the official Nexus HTTPS address.');
       } else {
-        const detail = message.replace(/\s+/g, ' ').slice(0, 110);
-        setCameraStatus('Could not start vision engine: ' + detail);
+        const detail = `${errorName ? errorName + ': ' : ''}${message}`.replace(/\s+/g, ' ').slice(0, 135);
+        setCameraStatus('Camera startup failed — ' + detail);
       }
     }
   }, [active]);
