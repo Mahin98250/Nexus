@@ -209,3 +209,19 @@
 .theme-light .ambient{opacity:.07}
 .theme-light .button-secondary{background:rgba(255,255,255,.8);border-color:rgba(43,54,91,.15);color:#35405f}
 @media(prefers-reduced-motion:reduce){.app-shell *, .app-shell *::before,.app-shell *::after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important;transition-duration:.01ms!important}}
+
+/* AirOS gesture affordances: the cursor shows exactly what can be selected. */
+.air-hand-hover{outline:2px solid rgba(128,235,211,.62)!important;outline-offset:2px!important;box-shadow:0 0 0 4px rgba(98,225,194,.1),0 0 22px rgba(98,225,194,.16)!important}
+.air-window-title.air-hand-hover{background:rgba(82,93,164,.42)!important}
+.air-launcher-section-label{margin:17px 0 9px;font:9px var(--mono);letter-spacing:1.25px;color:#8d96b7}
+.air-launcher-modes>button>span{background:rgba(77,206,204,.09);border-color:rgba(77,206,204,.18);color:#8fe6de}
+.air-os-layer.light .air-launcher-section-label{color:#6e7796}
+.air-os-layer.light .air-launcher-modes>button>span{background:rgba(57,170,165,.07);color:#248e8c}
+@media(max-width:700px){
+ .air-os-layer{overflow:auto}
+ .air-window{left:2%!important;width:96%;max-width:520px}
+ .air-window-maximized{left:8px!important;width:calc(100% - 16px)!important}
+ .air-launcher{max-height:calc(100% - 34px);overflow:auto}
+ .air-launcher-grid{gap:8px}
+ .air-launcher-grid>button{min-height:114px}
+}
