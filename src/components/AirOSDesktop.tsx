@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import {
   BatteryFull, ChevronDown, Palette, Command, FileText, Globe2, Minus,
-  Music2, Search, ShieldCheck, TerminalSquare, Wifi, X, Maximize2, Minimize2, RotateCcw,
+  Music2, Search, ShieldCheck, TerminalSquare, Wifi, X, Maximize2, Minimize2, RotateCcw, CircleHelp, Hand,
 } from 'lucide-react';
 import type { HandInputRef } from '../vision/types';
 import { AirHandCursorSmoother } from '../vision/airHandEngine';
@@ -53,6 +53,7 @@ export default function AirOSDesktop({ inputRef, cameraEnabled }: Props) {
   const [maximizedWindow, setMaximizedWindow] = useState<WindowId | null>(null);
   const [showLauncher, setShowLauncher] = useState(false);
   const [launcherQuery, setLauncherQuery] = useState('');
+  const [showGestureGuide, setShowGestureGuide] = useState(false);
   cameraRef.current = cameraEnabled;
   windowsRef.current = windows;
 
@@ -162,6 +163,7 @@ export default function AirOSDesktop({ inputRef, cameraEnabled }: Props) {
         setShowLauncher(false);
         setLauncherQuery('');
         setMaximizedWindow(null);
+        setShowGestureGuide(false);
         return;
       }
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
@@ -311,6 +313,8 @@ export default function AirOSDesktop({ inputRef, cameraEnabled }: Props) {
         );
       })}
 
+      <button className="air-os-help" onClick={() => setShowGestureGuide((value) => !value)} aria-label="Open gesture manual" title="Gesture manual"><CircleHelp size={17} /><span>Gesture guide</span></button>
+      {showGestureGuide && <section className="air-gesture-guide" role="dialog" aria-label="AirOS gesture manual"><header><div><span>QUICK START</span><h3>Control AirOS with your hand</h3></div><button onClick={() => setShowGestureGuide(false)} aria-label="Close gesture manual"><X size={17} /></button></header><p>Keep your hand fully visible in the camera preview. Move slowly at first; tracking needs good light and a clear background.</p><div className="air-gesture-list"><article><b className="gesture-symbol">✋</b><div><strong>Move cursor</strong><small>Move your open hand around the camera view. The cursor follows your hand.</small></div></article><article><b className="gesture-symbol">🤏</b><div><strong>Grab and move a window</strong><small>Place the cursor over a window title, pinch thumb and index finger together, move, then release.</small></div></article><article><b className="gesture-symbol">☝️</b><div><strong>Choose an app</strong><small>Use touch or mouse on the dock or launcher. Gesture window dragging is supported; not every button is gesture-mapped yet.</small></div></article><article><b className="gesture-symbol">✊</b><div><strong>Release / pause</strong><small>Open the pinch to release the window. If tracking is lost, bring your hand back into view.</small></div></article></div><footer><ShieldCheck size={13} /> Camera processing runs in this browser · ESC closes this guide</footer></section>}
       <div className="air-os-dock">
         {(Object.keys(titles) as WindowId[]).map((id) => {
           const Icon = icons[id];
