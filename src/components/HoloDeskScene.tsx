@@ -1,0 +1,220 @@
+import { useEffect, useRef } from 'react';
+import * as THREE from 'three';
+import type { HandInputRef } from '../vision/types';
+
+type HoloDeskSceneProps = {
+  inputRef: HandInputRef;
+  cameraEnabled: boolean;
+};
+
+export default function HoloDeskScene({ inputRef, cameraEnabled }: HoloDeskSceneProps) {
+  const hostRef = useRef<HTMLDivElement>(null);
+  const cameraEnabledRef = useRef(cameraEnabled);
+  cameraEnabledRef.current = cameraEnabled;
+
+  useEffect(() => {
+    const host = hostRef.current;
+    if (!host) return;
+
+    let renderer: THREE.WebGLRenderer;
+    try {
+      renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true, powerPreference: 'low-power' });
+    } catch {
+      host.classList.add('holo-scene-unavailable');
+      return;
+    }
+
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+    renderer.setSize(host.clientWidth, host.clientHeight);
+    renderer.setClearColor(0x000000, 0);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.domElement.className = 'holo-canvas';
+    renderer.domElement.setAttribute('aria-label', 'Interactive three-dimensional hologram. Drag with a mouse or hold a pinch gesture to move it.');
+    host.prepend(renderer.domElement);
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(42, Math.max(host.clientWidth, 1) / Math.max(host.clientHeight, 1), 0.1, 100);
+    camera.position.set(0, 0, 8.4);
+
+    scene.add(new THREE.AmbientLight(0xb3c4ff, 1.7));
+    const keyLight = new THREE.PointLight(0x9883ff, 45, 18);
+    keyLight.position.set(2, 3, 5);
+    scene.add(keyLight);
+    const cyanLight = new THREE.PointLight(0x57e4df, 24, 14);
+    cyanLight.position.set(-3, -1, 3);
+    scene.add(cyanLight);
+
+    const root = new THREE.Group();
+    scene.add(root);
+
+    const coreMaterial = new THREE.MeshPhysicalMaterial({
+      color: 0x9b8cff,
+      emissive: 0x5b3be0,
+      emissiveIntensity: 0.45,
+      metalness: 0.28,
+      roughness: 0.24,
+      transparent: true,
+      opacity: 0.78,
+      clearcoat: 0.8,
+    });
+    const core = new THREE.Mesh(new THREE.IcosahedronGeometry(0.86, 2), coreMaterial);
+    root.add(core);
+
+    const wire = new THREE.Mesh(
+      new THREE.IcosahedronGeometry(0.94, 1),
+      new THREE.MeshBasicMaterial({ color: 0xc5baff, wireframe: true, transparent: true, opacity: 0.63 }),
+    );
+    root.add(wire);
+
+    const innerCore = new THREE.Mesh(
+      new THREE.OctahedronGeometry(0.37, 1),
+      new THREE.MeshStandardMaterial({ color: 0x83f0e5, emissive: 0x35b9bd, emissiveIntensity: 1.25, metalness: 0.2, roughness: 0.2 }),
+    );
+    root.add(innerCore);
+
+    const ringOne = new THREE.Mesh(
+      new THREE.TorusGeometry(1.3, 0.012, 8, 120),
+      new THREE.MeshBasicMaterial({ color: 0x9c8dff, transparent: true, opacity: 0.8 }),
+    );
+    ringOne.rotation.x = 0.92;
+    ringOne.rotation.y = 0.25;
+    root.add(ringOne);
+
+    const ringTwo = new THREE.Mesh(
+      new THREE.TorusGeometry(1.55, 0.006, 6, 120),
+      new THREE.MeshBasicMaterial({ color: 0x5adbd7, transparent: true, opacity: 0.52 }),
+    );
+    ringTwo.rotation.x = 1.2;
+    ringTwo.rotation.y = -0.5;
+    root.add(ringTwo);
+
+    const particleCount = 180;
+    const particlePositions = new Float32Array(particleCount * 3);
+    for (let index = 0; index < particleCount; index += 1) {
+      const radius = 1.8 + Math.random() * 2.3;
+      const theta = Math.random() * Math.PI * 2;
+      const y = (Math.random() - 0.5) * 4.3;
+      particlePositions[index * 3] = Math.cos(theta) * radius;
+      particlePositions[index * 3 + 1] = y;
+      particlePositions[index * 3 + 2] = (Math.random() - 0.5) * 2.4;
+    }
+    const particleGeometry = new THREE.BufferGeometry();
+    particleGeometry.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
+    const particles = new THREE.Points(
+      particleGeometry,
+      new THREE.PointsMaterial({ color: 0xaaa1ff, size: 0.018, transparent: true, opacity: 0.7, sizeAttenuation: true }),
+    );
+    scene.add(particles);
+
+    const target = new THREE.Vector3(0, 0, 0);
+    const pointerTarget = new THREE.Vector3();
+    let pointerDragging = false;
+    let animationFrame = 0;
+    let disposed = false;
+    let lastTime = 0;
+    let lastInputTimestamp = -1;
+    let displayedPinch = false;
+    let smoothedAngle = 0;
+
+    const setPointerTarget = (event: PointerEvent) => {
+      const rect = renderer.domElement.getBoundingClientRect();
+      const normalizedX = (event.clientX - rect.left) / Math.max(rect.width, 1);
+      const normalizedY = (event.clientY - rect.top) / Math.max(rect.height, 1);
+      const halfHeight = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.position.z;
+      pointerTarget.set((normalizedX - 0.5) * halfHeight * camera.aspect * 2, (0.5 - normalizedY) * halfHeight * 2, 0);
+    };
+    const onPointerDown = (event: PointerEvent) => {
+      pointerDragging = true;
+      renderer.domElement.setPointerCapture(event.pointerId);
+      setPointerTarget(event);
+    };
+    const onPointerMove = (event: PointerEvent) => {
+      if (pointerDragging) setPointerTarget(event);
+    };
+    const onPointerUp = () => { pointerDragging = false; };
+    renderer.domElement.addEventListener('pointerdown', onPointerDown);
+    renderer.domElement.addEventListener('pointermove', onPointerMove);
+    renderer.domElement.addEventListener('pointerup', onPointerUp);
+    renderer.domElement.addEventListener('pointercancel', onPointerUp);
+
+    const resizeObserver = new ResizeObserver(() => {
+      if (disposed) return;
+      const width = Math.max(host.clientWidth, 1);
+      const height = Math.max(host.clientHeight, 1);
+      camera.aspect = width / height;
+      camera.updateProjectionMatrix();
+      renderer.setSize(width, height);
+    });
+    resizeObserver.observe(host);
+
+    const tick = (time: number) => {
+      if (disposed) return;
+      animationFrame = requestAnimationFrame(tick);
+      const delta = Math.min((time - (lastTime || time)) / 1000, 0.04);
+      lastTime = time;
+
+      const input = inputRef.current;
+      if (cameraEnabledRef.current && input.detected && input.pinch) {
+        target.set((input.x - 0.5) * 5.3, (0.5 - input.y) * 3.0, 0);
+        displayedPinch = true;
+        const angleDiff = Math.atan2(Math.sin(input.angle - smoothedAngle), Math.cos(input.angle - smoothedAngle));
+        smoothedAngle += angleDiff * 0.19;
+        lastInputTimestamp = input.timestamp;
+      } else if (displayedPinch && (!input.detected || !input.pinch)) {
+        displayedPinch = false;
+        lastInputTimestamp = input.timestamp;
+      }
+
+      if (pointerDragging) {
+        target.copy(pointerTarget);
+        displayedPinch = true;
+      } else if (!input.detected || !input.pinch) {
+        displayedPinch = false;
+      }
+
+      root.position.lerp(target, 1 - Math.exp(-delta * (displayedPinch ? 13 : 3.2)));
+      const timeSeconds = time * 0.001;
+      root.rotation.y += delta * (displayedPinch ? 0.45 : 0.3);
+      root.rotation.x = Math.sin(timeSeconds * 0.65) * 0.12 + smoothedAngle * (displayedPinch ? 0.22 : 0.05);
+      core.rotation.y = -timeSeconds * 0.12;
+      innerCore.rotation.x = timeSeconds * 0.55;
+      innerCore.rotation.y = -timeSeconds * 0.75;
+      wire.rotation.copy(core.rotation);
+      ringOne.rotation.z = timeSeconds * 0.17;
+      ringTwo.rotation.z = -timeSeconds * 0.11;
+      particles.rotation.y = timeSeconds * 0.018;
+      particles.rotation.x = Math.sin(timeSeconds * 0.13) * 0.025;
+
+      const pulse = 1 + Math.sin(timeSeconds * 2.3) * 0.022;
+      root.scale.setScalar(pulse * (displayedPinch ? 1.06 : 1));
+      renderer.render(scene, camera);
+    };
+    animationFrame = requestAnimationFrame(tick);
+
+    return () => {
+      disposed = true;
+      cancelAnimationFrame(animationFrame);
+      resizeObserver.disconnect();
+      renderer.domElement.removeEventListener('pointerdown', onPointerDown);
+      renderer.domElement.removeEventListener('pointermove', onPointerMove);
+      renderer.domElement.removeEventListener('pointerup', onPointerUp);
+      renderer.domElement.removeEventListener('pointercancel', onPointerUp);
+      renderer.dispose();
+      scene.traverse((object) => {
+        if (object instanceof THREE.Mesh || object instanceof THREE.Points) {
+          object.geometry.dispose();
+          const materials = Array.isArray(object.material) ? object.material : [object.material];
+          materials.forEach((material) => material.dispose());
+        }
+      });
+      renderer.domElement.remove();
+    };
+  }, [inputRef]);
+
+  return (
+    <div ref={hostRef} className="holo-scene-layer">
+      <div className="holo-scene-hud"><span className={cameraEnabled ? 'status-dot active' : 'status-dot'} /> {cameraEnabled ? 'PINCH TO GRAB' : 'DRAG TO INTERACT'}</div>
+      <div className="holo-scene-footnote">NEXUS SPATIAL ENGINE <span>·</span> LIVE SCENE</div>
+    </div>
+  );
+}
