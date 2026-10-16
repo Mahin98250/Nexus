@@ -52,6 +52,7 @@ export default function AirOSDesktop({ inputRef, cameraEnabled }: Props) {
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [maximizedWindow, setMaximizedWindow] = useState<WindowId | null>(null);
   const [showLauncher, setShowLauncher] = useState(false);
+  const [launcherQuery, setLauncherQuery] = useState('');
   cameraRef.current = cameraEnabled;
   windowsRef.current = windows;
 
@@ -72,6 +73,7 @@ export default function AirOSDesktop({ inputRef, cameraEnabled }: Props) {
       ? { ...item, z: topZRef.current, minimized: false, closed: false }
       : item));
     setShowLauncher(false);
+    setLauncherQuery('');
   };
 
   const startPointerDrag = (event: ReactPointerEvent<HTMLElement>, id: WindowId) => {
@@ -153,6 +155,29 @@ export default function AirOSDesktop({ inputRef, cameraEnabled }: Props) {
   useEffect(() => {
     try { localStorage.setItem('nexus-air-note', note); } catch { /* private mode can disable storage */ }
   }, [note]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setShowLauncher(false);
+        setLauncherQuery('');
+        setMaximizedWindow(null);
+        return;
+      }
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        setShowLauncher((value) => !value);
+        setLauncherQuery('');
+      }
+      if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === 'r') {
+        event.preventDefault();
+        setMaximizedWindow(null);
+        setWindows(initialWindows);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
 
   useEffect(() => {
     const interval = window.setInterval(() => setClock(new Date()), 15000);
@@ -299,7 +324,7 @@ export default function AirOSDesktop({ inputRef, cameraEnabled }: Props) {
         <button className="dock-app" onClick={() => { setMaximizedWindow(null); setWindows(initialWindows); }} aria-label="Reset workspace layout" title="Reset layout"><RotateCcw size={17} /><i /></button>
       </div>
 
-      {showLauncher && <div className="air-launcher" role="dialog" aria-label="AirOS app launcher"><div className="air-launcher-heading"><div><span>WORKSPACE</span><h3>What are we opening?</h3></div><button onClick={() => setShowLauncher(false)} aria-label="Close launcher"><X size={16} /></button></div><div className="air-launcher-grid">{(Object.keys(titles) as WindowId[]).map((id) => { const Icon = icons[id]; return <button key={id} onClick={() => openWindow(id)}><span><Icon size={21} /></span><strong>{titles[id]}</strong><small>{id === 'browser' ? 'Explore your workspace' : id === 'notes' ? 'Capture an idea' : id === 'terminal' ? 'Run safe demo commands' : 'Ambient focus audio'}</small></button>; })}</div><div className="air-launcher-foot"><ShieldCheck size={13} /> Runs locally in this browser</div></div>}
+      {showLauncher && <div className="air-launcher" role="dialog" aria-label="AirOS app launcher"><div className="air-launcher-heading"><div><span>WORKSPACE · CTRL K</span><h3>What are we opening?</h3></div><button onClick={() => { setShowLauncher(false); setLauncherQuery(''); }} aria-label="Close launcher"><X size={16} /></button></div><label className="air-launcher-search"><Search size={16} /><input autoFocus value={launcherQuery} onChange={(event) => setLauncherQuery(event.target.value)} placeholder="Search apps…" aria-label="Search apps" /></label><div className="air-launcher-grid">{(Object.keys(titles) as WindowId[]).filter((id) => titles[id].toLowerCase().includes(launcherQuery.toLowerCase())).map((id) => { const Icon = icons[id]; return <button key={id} onClick={() => openWindow(id)}><span><Icon size={21} /></span><strong>{titles[id]}</strong><small>{id === 'browser' ? 'Explore your workspace' : id === 'notes' ? 'Capture an idea' : id === 'terminal' ? 'Run safe demo commands' : 'Ambient focus audio'}</small></button>; })}{!(Object.keys(titles) as WindowId[]).some((id) => titles[id].toLowerCase().includes(launcherQuery.toLowerCase())) && <p className="air-launcher-empty">No apps match “{launcherQuery}”. Try Notes, Terminal or Browser.</p>}</div><div className="air-launcher-foot"><ShieldCheck size={13} /> Runs locally in this browser <span>ESC to close</span></div></div>}
       <div ref={cursorRef} className="air-hand-cursor"><span /><i /></div>
       <div className="air-os-corner">{cameraEnabled ? 'PINCH A WINDOW TITLE TO MOVE' : 'DRAG WINDOW TITLES · CAMERA OPTIONAL'} <span>·</span> PRIVATE SESSION</div>
     </div>
