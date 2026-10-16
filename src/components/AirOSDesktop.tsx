@@ -8,6 +8,8 @@ import { AirHandCursorSmoother } from '../vision/airHandEngine';
 
 type WindowId = 'browser' | 'notes' | 'terminal' | 'music';
 type NexusModeId = 'holodesk' | 'shadowstrike' | 'airos' | 'realityscan';
+type KeyboardTarget = 'address' | 'note' | 'terminal' | 'launcher' | null;
+const keyboardRows = ['qwertyuiop', 'asdfghjkl', 'zxcvbnm'];
 type AirWindow = { id: WindowId; x: number; y: number; z: number; minimized: boolean; closed: boolean };
 type DragState = { id: WindowId; startX: number; startY: number; originX: number; originY: number; source: 'pointer' | 'gesture' };
 
@@ -58,12 +60,16 @@ export default function AirOSDesktop({ inputRef, cameraEnabled, onSwitchExperien
   const [terminalOutput, setTerminalOutput] = useState<string[]>(['NEXUS TERMINAL 0.1', 'Type help to see demo commands.']);
   const [playing, setPlaying] = useState(false);
   const [clock, setClock] = useState(() => new Date());
-  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
+    try { return localStorage.getItem('nexus-air-theme') === 'light' ? 'light' : 'dark'; }
+    catch { return 'dark'; }
+  });
   const [maximizedWindow, setMaximizedWindow] = useState<WindowId | null>(null);
   const [showLauncher, setShowLauncher] = useState(false);
   const hoveredTargetRef = useRef<HTMLElement | null>(null);
   const [launcherQuery, setLauncherQuery] = useState('');
   const [showGestureGuide, setShowGestureGuide] = useState(false);
+  const [keyboardTarget, setKeyboardTarget] = useState<KeyboardTarget>(null);
   cameraRef.current = cameraEnabled;
   windowsRef.current = windows;
 
@@ -103,9 +109,8 @@ export default function AirOSDesktop({ inputRef, cameraEnabled, onSwitchExperien
     event.currentTarget.setPointerCapture?.(event.pointerId);
   };
 
-  const runCommand = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const command = terminalCommand.trim();
+  const executeTerminalCommand = (rawCommand: string) => {
+    const command = rawCommand.trim();
     if (!command) return;
     let output: string;
     switch (command.toLowerCase()) {
@@ -116,8 +121,46 @@ export default function AirOSDesktop({ inputRef, cameraEnabled, onSwitchExperien
       case 'clear': setTerminalOutput([]); setTerminalCommand(''); return;
       default: output = command + ': command not found (demo terminal only)';
     }
-    setTerminalOutput((current) => [...current, '$ ' + command, output].slice(-8));
+    setTerminalOutput((current) => [...current, '$ ' + command, output].slice(-10));
     setTerminalCommand('');
+  };
+
+  const runCommand = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    executeTerminalCommand(terminalCommand);
+  };
+
+  const pressVirtualKey = (key: string) => {
+    if (!keyboardTarget) return;
+    if (key === 'Done') {
+      setKeyboardTarget(null);
+      return;
+    }
+    if (key === 'Enter') {
+      if (keyboardTarget === 'terminal') executeTerminalCommand(terminalCommand);
+      if (keyboardTarget === 'address') setAddress((value) => value.trim() || 'nexus://welcome');
+      if (keyboardTarget === 'launcher') {
+        const match = (Object.keys(titles) as WindowId[]).find((id) => titles[id].toLowerCase().includes(launcherQuery.toLowerCase()));
+        if (match) {
+          openWindow(match);
+          return;
+        }
+      }
+      if (keyboardTarget !== 'note') setKeyboardTarget(null);
+      else setNote((value) => value.length < 5000 ? value + '\\n' : value);
+      return;
+    }
+    const applyKey = (value: string, limit: number) => key === 'Backspace'
+      ? value.slice(0, -1)
+      : key === 'Space' ? (value.length < limit ? value + ' ' : value)
+      : (value.length < limit ? value + key : value);
+    switch (keyboardTarget) {
+      case 'address': setAddress((value) => applyKey(value, 180)); break;
+      case 'note': setNote((value) => applyKey(value, 5000)); break;
+      case 'terminal': setTerminalCommand((value) => applyKey(value, 180)); break;
+      case 'launcher': setLauncherQuery((value) => applyKey(value, 80)); break;
+      default: break;
+    }
   };
 
   const stopAmbient = () => {
@@ -168,6 +211,10 @@ export default function AirOSDesktop({ inputRef, cameraEnabled, onSwitchExperien
   useEffect(() => {
     try { localStorage.setItem('nexus-air-note', note); } catch { /* private mode can disable storage */ }
   }, [note]);
+
+  useEffect(() => {
+    try { localStorage.setItem('nexus-air-theme', theme); } catch { /* storage may be unavailable */ }
+  }, [theme]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -334,11 +381,11 @@ export default function AirOSDesktop({ inputRef, cameraEnabled, onSwitchExperien
               <button className="air-window-action" aria-label={maximizedWindow === item.id ? 'Restore window' : 'Maximize window'} onClick={() => setMaximizedWindow(maximizedWindow === item.id ? null : item.id)}>{maximizedWindow === item.id ? <Minimize2 size={12} /> : <Maximize2 size={12} />}</button>
             </header>
             {item.id === 'browser' && <div className="air-app-body browser-body">
-              <div className="browser-address"><ShieldCheck size={12} /><input value={address} onChange={(event) => setAddress(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') setAddress(event.currentTarget.value.trim() || 'nexus://welcome'); }} aria-label="Demo browser address" /><button onClick={() => setAddress('nexus://welcome')} aria-label="Go to welcome page"><Search size={12} /></button></div>
+              <div className="browser-address"><ShieldCheck size={12} /><input value={address} onChange={(event) => setAddress(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') setAddress(event.currentTarget.value.trim() || 'nexus://welcome'); }} onFocus={() => { if (cameraRef.current) setKeyboardTarget('address'); }} aria-label="Demo browser address" /><button onClick={() => setAddress('nexus://welcome')} aria-label="Go to welcome page"><Search size={12} /></button></div>
               <div className="browser-welcome"><span className="browser-eyebrow">NEXUS WEB SPACE</span><h3>{address === 'nexus://welcome' ? 'A space of your own.' : 'Ready to explore?'}</h3><p>{address === 'nexus://welcome' ? 'Your ideas, your tools, your flow.' : 'This preview keeps navigation inside the demo workspace.'}</p><button onClick={() => setSearchText(searchText ? '' : 'Explore gesture controls')}>{searchText || 'Explore workspace'} <ChevronDown size={12} /></button>{searchText && <small className="browser-search-result">Try HoloDesk, ShadowStrike, AirOS, or RealityScan from Nexus home.</small>}</div>
             </div>}
-            {item.id === 'notes' && <div className="air-app-body notes-body"><div className="notes-bar"><span>PERSONAL NOTE</span><span>LOCAL</span></div><textarea value={note} onChange={(event) => setNote(event.target.value)} aria-label="Quick note" placeholder="Write an idea…" /><div className="notes-footer"><ShieldCheck size={11} /> Saved on this device</div></div>}
-            {item.id === 'terminal' && <div className="air-app-body terminal-body"><div className="terminal-output">{terminalOutput.map((line, index) => <div key={index} className={line.startsWith('$') ? 'terminal-command' : ''}>{line}</div>)}</div><form className="terminal-form" onSubmit={runCommand}><span>$</span><input value={terminalCommand} onChange={(event) => setTerminalCommand(event.target.value)} aria-label="Demo terminal command" placeholder="type help…" autoComplete="off" /><button aria-label="Run demo command" type="submit"><ChevronDown size={12} /></button></form><div className="terminal-safety">SIMULATED SHELL · NO SYSTEM COMMANDS EXECUTE</div></div>}
+            {item.id === 'notes' && <div className="air-app-body notes-body"><div className="notes-bar"><span>PERSONAL NOTE</span><span>LOCAL</span></div><textarea value={note} onChange={(event) => setNote(event.target.value)} onFocus={() => { if (cameraRef.current) setKeyboardTarget('note'); }} aria-label="Quick note" placeholder="Write an idea…" /><div className="notes-footer"><ShieldCheck size={11} /> Saved on this device</div></div>}
+            {item.id === 'terminal' && <div className="air-app-body terminal-body"><div className="terminal-output">{terminalOutput.map((line, index) => <div key={index} className={line.startsWith('$') ? 'terminal-command' : ''}>{line}</div>)}</div><form className="terminal-form" onSubmit={runCommand}><span>$</span><input value={terminalCommand} onChange={(event) => setTerminalCommand(event.target.value)} onFocus={() => { if (cameraRef.current) setKeyboardTarget('terminal'); }} aria-label="Demo terminal command" placeholder="type help…" autoComplete="off" /><button aria-label="Run demo command" type="submit"><ChevronDown size={12} /></button></form><div className="terminal-safety">SIMULATED SHELL · NO SYSTEM COMMANDS EXECUTE</div></div>}
             {item.id === 'music' && <div className="air-app-body music-body"><div className="music-art"><div className="music-orbit orbit-a" /><div className="music-orbit orbit-b" /><div className="music-core"><Music2 size={23} /></div></div><span className="music-track-title">Slow Orbit</span><span className="music-track-subtitle">Nexus ambient generator</span><div className={'music-wave ' + (playing ? 'playing' : '')}>{Array.from({ length: 23 }, (_, index) => <i key={index} style={{ height: (9 + ((index * 13) % 21)) + 'px' }} />)}</div><button className="music-play" onClick={() => void toggleAmbient()}>{playing ? 'STOP AMBIENT' : 'PLAY AMBIENT'} <Music2 size={13} /></button><span className="music-note">Synthesized tone · generated locally</span></div>}
           </section>
         );
@@ -359,7 +406,8 @@ export default function AirOSDesktop({ inputRef, cameraEnabled, onSwitchExperien
         <button className="dock-app" onClick={() => { setMaximizedWindow(null); setWindows(initialWindows); }} aria-label="Reset workspace layout" title="Reset layout"><RotateCcw size={17} /><i /></button>
       </div>
 
-      {showLauncher && <div className="air-launcher" role="dialog" aria-label="AirOS app launcher"><div className="air-launcher-heading"><div><span>WORKSPACE · CTRL K</span><h3>What are we opening?</h3></div><button onClick={() => { setShowLauncher(false); setLauncherQuery(''); }} aria-label="Close launcher"><X size={16} /></button></div><label className="air-launcher-search"><Search size={16} /><input autoFocus value={launcherQuery} onChange={(event) => setLauncherQuery(event.target.value)} placeholder="Search apps…" aria-label="Search apps" /></label><div className="air-launcher-grid">{(Object.keys(titles) as WindowId[]).filter((id) => titles[id].toLowerCase().includes(launcherQuery.toLowerCase())).map((id) => { const Icon = icons[id]; return <button key={id} onClick={() => openWindow(id)}><span><Icon size={21} /></span><strong>{titles[id]}</strong><small>{id === 'browser' ? 'Explore your workspace' : id === 'notes' ? 'Capture an idea' : id === 'terminal' ? 'Run safe demo commands' : 'Ambient focus audio'}</small></button>; })}{!(Object.keys(titles) as WindowId[]).some((id) => titles[id].toLowerCase().includes(launcherQuery.toLowerCase())) && <p className="air-launcher-empty">No apps match “{launcherQuery}”. Try Notes, Terminal or Browser.</p>}</div><div className="air-launcher-section-label">NEXUS EXPERIENCES</div><div className="air-launcher-grid air-launcher-modes">{modeIds.filter((id) => modeTitles[id].toLowerCase().includes(launcherQuery.toLowerCase())).map((id) => { const Icon = modeIcons[id]; return <button key={id} onClick={() => { setShowLauncher(false); setLauncherQuery(''); onSwitchExperience(id); }}><span><Icon size={21} /></span><strong>{modeTitles[id]}</strong><small>{id === 'holodesk' ? '3D hand interaction' : id === 'shadowstrike' ? 'Body-controlled game' : id === 'airos' ? 'Return to desktop' : 'Live object detection'}</small></button>; })}</div><div className="air-launcher-foot"><ShieldCheck size={13} /> Runs locally in this browser <span>ESC to close</span></div></div>}
+      {showLauncher && <div className="air-launcher" role="dialog" aria-label="AirOS app launcher"><div className="air-launcher-heading"><div><span>WORKSPACE · CTRL K</span><h3>What are we opening?</h3></div><button onClick={() => { setShowLauncher(false); setLauncherQuery(''); }} aria-label="Close launcher"><X size={16} /></button></div><label className="air-launcher-search"><Search size={16} /><input autoFocus value={launcherQuery} onChange={(event) => setLauncherQuery(event.target.value)} onFocus={() => { if (cameraRef.current) setKeyboardTarget('launcher'); }} placeholder="Search apps…" aria-label="Search apps" /></label><div className="air-launcher-grid">{(Object.keys(titles) as WindowId[]).filter((id) => titles[id].toLowerCase().includes(launcherQuery.toLowerCase())).map((id) => { const Icon = icons[id]; return <button key={id} onClick={() => openWindow(id)}><span><Icon size={21} /></span><strong>{titles[id]}</strong><small>{id === 'browser' ? 'Explore your workspace' : id === 'notes' ? 'Capture an idea' : id === 'terminal' ? 'Run safe demo commands' : 'Ambient focus audio'}</small></button>; })}{!(Object.keys(titles) as WindowId[]).some((id) => titles[id].toLowerCase().includes(launcherQuery.toLowerCase())) && <p className="air-launcher-empty">No apps match “{launcherQuery}”. Try Notes, Terminal or Browser.</p>}</div><div className="air-launcher-section-label">NEXUS EXPERIENCES</div><div className="air-launcher-grid air-launcher-modes">{modeIds.filter((id) => modeTitles[id].toLowerCase().includes(launcherQuery.toLowerCase())).map((id) => { const Icon = modeIcons[id]; return <button key={id} onClick={() => { setShowLauncher(false); setLauncherQuery(''); onSwitchExperience(id); }}><span><Icon size={21} /></span><strong>{modeTitles[id]}</strong><small>{id === 'holodesk' ? '3D hand interaction' : id === 'shadowstrike' ? 'Body-controlled game' : id === 'airos' ? 'Return to desktop' : 'Live object detection'}</small></button>; })}</div><div className="air-launcher-foot"><ShieldCheck size={13} /> Runs locally in this browser <span>ESC to close</span></div></div>}
+      {keyboardTarget && cameraEnabled && <section className="air-gesture-keyboard" role="dialog" aria-label="On-screen gesture keyboard"><header><span><CircleHelp size={13} /> GESTURE KEYBOARD · {keyboardTarget.toUpperCase()}</span><button onClick={() => setKeyboardTarget(null)}>Done <X size={14} /></button></header>{keyboardRows.map((row) => <div className="air-keyboard-row" key={row}>{row.split('').map((key) => <button key={key} onClick={() => pressVirtualKey(key)}>{key}</button>)}</div>)}<div className="air-keyboard-row air-keyboard-actions"><button onClick={() => pressVirtualKey('Backspace')}>⌫</button><button onClick={() => pressVirtualKey('Space')}>Space</button><button onClick={() => pressVirtualKey('Enter')}>Enter ↵</button><button onClick={() => pressVirtualKey('Done')}>Done</button></div></section>}
       <div ref={cursorRef} className="air-hand-cursor"><span /><i /></div>
       <div className="air-os-corner">{cameraEnabled ? 'PINCH A WINDOW TITLE TO MOVE' : 'DRAG WINDOW TITLES · CAMERA OPTIONAL'} <span>·</span> PRIVATE SESSION</div>
     </div>
