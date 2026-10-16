@@ -29,6 +29,8 @@ export default function AirOSDesktop({ inputRef, cameraEnabled }: Props) {
   const dragRef = useRef<DragState | null>(null);
   const lastPinchRef = useRef(false);
   const lastGesturePositionRef = useRef({ x: Number.NaN, y: Number.NaN });
+  const smoothedHandPositionRef = useRef({ x: 0.5, y: 0.5, initialized: false });
+  const lastGesturePositionRef = useRef({ x: Number.NaN, y: Number.NaN });
   const cameraRef = useRef(cameraEnabled);
   const windowsRef = useRef(initialWindows);
   const topZRef = useRef(5);
@@ -186,12 +188,21 @@ export default function AirOSDesktop({ inputRef, cameraEnabled }: Props) {
       const detected = Boolean(hand?.detected);
       cursor.style.visibility = detected ? 'visible' : 'hidden';
       if (detected && hand) {
-        cursor.style.left = (hand.x * 100) + '%';
-        cursor.style.top = (hand.y * 100) + '%';
+        const smooth = smoothedHandPositionRef.current;
+        if (!smooth.initialized) {
+          smooth.x = hand.x;
+          smooth.y = hand.y;
+          smooth.initialized = true;
+        } else {
+          smooth.x += (hand.x - smooth.x) * 0.32;
+          smooth.y += (hand.y - smooth.y) * 0.32;
+        }
+        cursor.style.left = (smooth.x * 100) + '%';
+        cursor.style.top = (smooth.y * 100) + '%';
         cursor.classList.toggle('air-cursor-pinching', hand.pinch);
         const rect = host.getBoundingClientRect();
-        const screenX = rect.left + hand.x * rect.width;
-        const screenY = rect.top + hand.y * rect.height;
+        const screenX = rect.left + smooth.x * rect.width;
+        const screenY = rect.top + smooth.y * rect.height;
         if (hand.pinch && !lastPinchRef.current) {
           const hit = document.elementFromPoint(screenX, screenY)?.closest<HTMLElement>('[data-air-window-title]');
           const id = hit?.dataset.airWindowTitle as WindowId | undefined;
@@ -200,6 +211,7 @@ export default function AirOSDesktop({ inputRef, cameraEnabled }: Props) {
             topZRef.current += 1;
             focusWindow(id);
             dragRef.current = { id, startX: screenX, startY: screenY, originX: model.x, originY: model.y, source: 'gesture' };
+            lastGesturePositionRef.current = { x: screenX, y: screenY };
             lastGesturePositionRef.current = { x: screenX, y: screenY };
           }
         }
