@@ -85,7 +85,6 @@ export default function App() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const gestureRecognizerRef = useRef<GestureRecognizer | null>(null);
   const landmarkerRef = useRef<HandLandmarker | null>(null);
-  const handTrackingModeRef = useRef<'gesture-recognizer' | 'landmark-fallback' | null>(null);
   const lastHandCountRef = useRef(-1);
   const lastVideoTimeRef = useRef(-1);
   const poseLandmarkerRef = useRef<PoseLandmarker | null>(null);
@@ -108,7 +107,6 @@ export default function App() {
     gestureRecognizerRef.current = null;
     landmarkerRef.current?.close();
     landmarkerRef.current = null;
-    handTrackingModeRef.current = null;
     lastHandCountRef.current = -1;
     lastVideoTimeRef.current = -1;
     poseLandmarkerRef.current?.close();
@@ -302,7 +300,6 @@ export default function App() {
             return;
           }
           gestureRecognizerRef.current = recognizer;
-          handTrackingModeRef.current = 'gesture-recognizer';
         } else {
           let fallbackLandmarker: HandLandmarker | null = null;
           let fallbackError: unknown = gestureModelError;
@@ -336,7 +333,6 @@ export default function App() {
             return;
           }
           landmarkerRef.current = fallbackLandmarker;
-          handTrackingModeRef.current = 'landmark-fallback';
         }
       }
       if (trackBody) {
@@ -493,7 +489,6 @@ export default function App() {
       gestureRecognizerRef.current = null;
       landmarkerRef.current?.close();
       landmarkerRef.current = null;
-      handTrackingModeRef.current = null;
       poseLandmarkerRef.current?.close();
       poseLandmarkerRef.current = null;
       bodyInputRef.current = { ...EMPTY_BODY_INPUT };
