@@ -18,13 +18,11 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
       - name: Install dependencies
         run: npm install --ignore-scripts
-      - name: Temporary dependency advisory detail
-        run: |
-          npm audit --json > /tmp/nexus-audit.json || true
-          node -e "const r=require('/tmp/nexus-audit.json'); for (const [name,v] of Object.entries(r.vulnerabilities || {})) console.log(name + ' | ' + v.severity + ' | direct=' + v.isDirect + ' | range=' + v.range + ' | fix=' + JSON.stringify(v.fixAvailable));"
+      - name: Dependency audit
+        run: npm audit --audit-level=high
       - name: Type-check
         run: npm run typecheck
       - name: Unit tests
