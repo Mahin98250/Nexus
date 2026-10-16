@@ -24,10 +24,10 @@ export default function HoloDeskScene({ inputRef, cameraEnabled }: HoloDeskScene
     try {
       renderer = new THREE.WebGLRenderer({
         alpha: true,
-        antialias: false,
+        antialias: true,
         powerPreference: 'high-performance',
         failIfMajorPerformanceCaveat: false,
-        precision: 'mediump',
+        precision: 'highp',
       });
     } catch {
       setWebglUnavailable(true);
@@ -50,16 +50,17 @@ export default function HoloDeskScene({ inputRef, cameraEnabled }: HoloDeskScene
     };
     renderer.domElement.addEventListener('webglcontextlost', onWebGLContextLost);
 
-    // Match AirHand's responsiveness target on touch devices: fewer rendered
-    // pixels and particles reduce GPU work while CSS keeps the scene full-size.
-    const lowPowerDevice = (navigator.hardwareConcurrency || 4) <= 4 ||
-      window.matchMedia('(pointer: coarse)').matches;
-    const particleCount = lowPowerDevice ? 72 : 150;
-    const curveSegments = lowPowerDevice ? 72 : 112;
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, lowPowerDevice ? 0.9 : 1.2));
+    // Preserve crisp, antialiased geometry while keeping the mobile render budget bounded.
+    const touchDevice = window.matchMedia('(pointer: coarse)').matches;
+    const lowPowerDevice = (navigator.hardwareConcurrency || 4) <= 4;
+    const particleCount = lowPowerDevice ? 112 : 220;
+    const curveSegments = touchDevice ? 144 : 192;
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, touchDevice ? 1.65 : 2));
     renderer.setSize(Math.max(host.clientWidth, 1), Math.max(host.clientHeight, 1));
     renderer.setClearColor(0x000000, 0);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.12;
     renderer.domElement.className = 'holo-canvas';
     renderer.domElement.setAttribute('aria-label', 'Interactive three-dimensional hologram. Drag with a mouse or hold a pinch gesture to move it.');
     host.prepend(renderer.domElement);
@@ -72,7 +73,7 @@ export default function HoloDeskScene({ inputRef, cameraEnabled }: HoloDeskScene
     const keyLight = new THREE.PointLight(0x9883ff, 45, 18);
     keyLight.position.set(2, 3, 5);
     scene.add(keyLight);
-    const cyanLight = new THREE.PointLight(0x57e4df, 24, 14);
+    const cyanLight = new THREE.PointLight(0x57e4df, 30, 14);
     cyanLight.position.set(-3, -1, 3);
     scene.add(cyanLight);
 
@@ -82,19 +83,19 @@ export default function HoloDeskScene({ inputRef, cameraEnabled }: HoloDeskScene
     const coreMaterial = new THREE.MeshPhysicalMaterial({
       color: 0x9b8cff,
       emissive: 0x5b3be0,
-      emissiveIntensity: 0.45,
+      emissiveIntensity: 0.58,
       metalness: 0.28,
       roughness: 0.24,
       transparent: true,
-      opacity: 0.78,
-      clearcoat: 0.8,
+      opacity: 0.84,
+      clearcoat: 1,
     });
-    const core = new THREE.Mesh(new THREE.IcosahedronGeometry(0.86, lowPowerDevice ? 1 : 2), coreMaterial);
+    const core = new THREE.Mesh(new THREE.IcosahedronGeometry(0.86, lowPowerDevice ? 2 : 3), coreMaterial);
     root.add(core);
 
     const wire = new THREE.Mesh(
-      new THREE.IcosahedronGeometry(0.94, 1),
-      new THREE.MeshBasicMaterial({ color: 0xc5baff, wireframe: true, transparent: true, opacity: 0.63 }),
+      new THREE.IcosahedronGeometry(0.94, 2),
+      new THREE.MeshBasicMaterial({ color: 0xd8d0ff, wireframe: true, transparent: true, opacity: 0.76 }),
     );
     root.add(wire);
 
@@ -133,7 +134,7 @@ export default function HoloDeskScene({ inputRef, cameraEnabled }: HoloDeskScene
     particleGeometry.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
     const particles = new THREE.Points(
       particleGeometry,
-      new THREE.PointsMaterial({ color: 0xaaa1ff, size: 0.018, transparent: true, opacity: 0.7, sizeAttenuation: true }),
+      new THREE.PointsMaterial({ color: 0xaaa1ff, size: 0.022, transparent: true, opacity: 0.76, sizeAttenuation: true, depthWrite: false }),
     );
     scene.add(particles);
 
@@ -144,6 +145,10 @@ export default function HoloDeskScene({ inputRef, cameraEnabled }: HoloDeskScene
     let lastTime = 0;
     let displayedPinch = false;
     let smoothedAngle = 0;
+    let smoothedHandX = 0.5;
+    let smoothedHandY = 0.5;
+    let hasSmoothedHand = false;
+    let lastHandSampleAt = 0;
 
     const setPointerTarget = (event: PointerEvent) => {
       const rect = renderer.domElement.getBoundingClientRect();
@@ -184,19 +189,39 @@ export default function HoloDeskScene({ inputRef, cameraEnabled }: HoloDeskScene
 
       const input = inputRef.current;
       if (cameraEnabledRef.current && input.detected && input.pinch) {
-        // Use the exact same camera-frustum mapping as mouse/touch dragging.
-        // This removes the old hard-coded 5.3 × 3.0 scaling offset.
+        // Adaptive low-pass: suppress fingertip jitter when steady, but reduce
+        // lag automatically when the hand moves quickly (AirHand-style response).
+        if (!hasSmoothedHand) {
+          smoothedHandX = input.x;
+          smoothedHandY = input.y;
+          hasSmoothedHand = true;
+        }
+        const sampleAt = input.timestamp || time;
+        const sampleDelta = Math.max(1, Math.min(100, sampleAt - (lastHandSampleAt || sampleAt - 16)));
+        const handDelta = Math.hypot(input.x - smoothedHandX, input.y - smoothedHandY);
+        const handSpeed = handDelta / sampleDelta * 1000;
+        const smoothing = handSpeed > 1.7 || handDelta > 0.12 ? 0.82
+          : handSpeed > 0.65 || handDelta > 0.045 ? 0.62 : 0.34;
+        const sampleFactor = 1 - Math.pow(1 - smoothing, Math.max(0.25, delta * 60));
+        if (handDelta > 0.0011) {
+          smoothedHandX += (input.x - smoothedHandX) * sampleFactor;
+          smoothedHandY += (input.y - smoothedHandY) * sampleFactor;
+        }
+        lastHandSampleAt = sampleAt;
+        // Match the mouse/touch camera-frustum transform exactly.
         const halfHeight = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.position.z;
         target.set(
-          (input.x - 0.5) * halfHeight * camera.aspect * 2,
-          (0.5 - input.y) * halfHeight * 2,
+          (smoothedHandX - 0.5) * halfHeight * camera.aspect * 2,
+          (0.5 - smoothedHandY) * halfHeight * 2,
           0,
         );
         displayedPinch = true;
         const angleDiff = Math.atan2(Math.sin(input.angle - smoothedAngle), Math.cos(input.angle - smoothedAngle));
-        smoothedAngle += angleDiff * 0.19;
+        smoothedAngle += angleDiff * (handSpeed > 0.7 ? 0.34 : 0.2);
       } else if (displayedPinch && (!input.detected || !input.pinch)) {
         displayedPinch = false;
+        hasSmoothedHand = false;
+        lastHandSampleAt = 0;
       }
 
       if (pointerDragging) {
@@ -206,7 +231,7 @@ export default function HoloDeskScene({ inputRef, cameraEnabled }: HoloDeskScene
         displayedPinch = false;
       }
 
-      root.position.lerp(target, 1 - Math.exp(-delta * (displayedPinch ? 19 : 3.2)));
+      root.position.lerp(target, 1 - Math.exp(-delta * (displayedPinch ? 24 : 3.2)));
       const timeSeconds = time * 0.001;
       root.rotation.y += delta * (displayedPinch ? 0.45 : 0.3);
       root.rotation.x = Math.sin(timeSeconds * 0.65) * 0.12 + smoothedAngle * (displayedPinch ? 0.22 : 0.05);
@@ -219,7 +244,7 @@ export default function HoloDeskScene({ inputRef, cameraEnabled }: HoloDeskScene
       particles.rotation.y = timeSeconds * 0.018;
       particles.rotation.x = Math.sin(timeSeconds * 0.13) * 0.025;
 
-      const pulse = 1 + Math.sin(timeSeconds * 2.3) * 0.022;
+      const pulse = 1 + Math.sin(timeSeconds * 2.3) * 0.016;
       root.scale.setScalar(pulse * (displayedPinch ? 1.06 : 1));
       try {
         renderer.render(scene, camera);
