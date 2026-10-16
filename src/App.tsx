@@ -161,7 +161,7 @@ export default function App() {
       // MediaStream before the video element has a usable frame size.
       if (video.readyState < HTMLMediaElement.HAVE_METADATA) {
         await new Promise<void>((resolve, reject) => {
-          const timeout = window.setTimeout(() => reject(new Error('Camera connected but video metadata did not arrive. Try reopening the camera.')), 8000);
+          let timeout = 0;
           const cleanup = () => {
             window.clearTimeout(timeout);
             video.removeEventListener('loadedmetadata', onReady);
@@ -169,8 +169,14 @@ export default function App() {
           };
           const onReady = () => { cleanup(); resolve(); };
           const onError = () => { cleanup(); reject(new Error('The browser could not read video from the selected camera.')); };
+          timeout = window.setTimeout(() => {
+            cleanup();
+            reject(new Error('Camera connected but video metadata did not arrive within 8 seconds. Try reopening the camera.'));
+          }, 8000);
           video.addEventListener('loadedmetadata', onReady, { once: true });
           video.addEventListener('error', onError, { once: true });
+          // Metadata may arrive between the outer readyState check and listener registration.
+          if (video.readyState >= HTMLMediaElement.HAVE_METADATA) onReady();
         });
       }
       await video.play();
