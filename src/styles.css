@@ -225,3 +225,43 @@
  .air-launcher-grid{gap:8px}
  .air-launcher-grid>button{min-height:114px}
 }
+
+/* Gesture-operated controls and virtual text entry inside AirOS. */
+.air-hand-hover{outline:2px solid rgba(128,235,211,.62)!important;outline-offset:2px!important;box-shadow:0 0 0 4px rgba(98,225,194,.1),0 0 22px rgba(98,225,194,.16)!important}
+.air-window-title.air-hand-hover{background:rgba(82,93,164,.42)!important}
+.air-launcher-section-label{margin:17px 0 9px;font:9px var(--mono);letter-spacing:1.25px;color:#8d96b7}
+.air-launcher-modes>button>span{background:rgba(77,206,204,.09);border-color:rgba(77,206,204,.18);color:#8fe6de}
+.air-os-layer.light .air-launcher-section-label{color:#6e7796}
+.air-os-layer.light .air-launcher-modes>button>span{background:rgba(57,170,165,.07);color:#248e8c}
+.air-gesture-keyboard{position:absolute;z-index:24;left:50%;bottom:76px;transform:translateX(-50%);width:min(720px,calc(100% - 24px));padding:12px;border:1px solid rgba(174,166,255,.24);border-radius:15px;background:rgba(12,16,34,.96);box-shadow:0 20px 65px rgba(0,0,0,.5);backdrop-filter:blur(26px);color:#eef0ff}
+.air-gesture-keyboard>header{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:9px;font:9px var(--mono);letter-spacing:.9px;color:#a8a0ff}
+.air-gesture-keyboard>header>span{display:flex;align-items:center;gap:7px}
+.air-gesture-keyboard>header button{display:flex;align-items:center;gap:6px;padding:7px 9px;border:1px solid rgba(181,186,255,.18);border-radius:8px;background:rgba(255,255,255,.045);color:#d7dcf5;font-size:10px}
+.air-keyboard-row{display:flex;justify-content:center;gap:5px;margin-top:5px}
+.air-keyboard-row>button{min-width:0;flex:1;height:39px;border:1px solid rgba(179,186,255,.13);border-radius:7px;background:linear-gradient(180deg,rgba(255,255,255,.07),rgba(255,255,255,.025));color:#e3e6fb;font-size:13px;text-transform:uppercase;touch-action:manipulation}
+.air-keyboard-row>button:hover,.air-keyboard-row>button.air-hand-hover{background:rgba(126,112,255,.23)}
+.air-keyboard-actions>button{height:35px;font-size:10px;text-transform:none;flex:1.2}
+.air-keyboard-actions>button:first-child{flex:.7}
+.air-keyboard-actions>button:nth-child(2){flex:2}
+.air-os-layer.light .air-gesture-keyboard{background:rgba(246,248,255,.97);color:#1c2540;border-color:rgba(77,80,145,.2)}
+.air-os-layer.light .air-gesture-keyboard>header{color:#6358b4}
+.air-os-layer.light .air-gesture-keyboard>header button,.air-os-layer.light .air-keyboard-row>button{background:rgba(255,255,255,.75);color:#25304e;border-color:rgba(64,75,133,.15)}
+@media(max-width:700px){
+ .air-os-layer{overflow:auto}
+ .air-window{left:2%!important;width:96%;max-width:520px}
+ .air-window-maximized{left:8px!important;width:calc(100% - 16px)!important}
+ .air-launcher{max-height:calc(100% - 34px);overflow:auto}
+ .air-launcher-grid{gap:8px}
+ .air-launcher-grid>button{min-height:98px}
+ .air-gesture-keyboard{bottom:62px;width:calc(100% - 10px);padding:7px;border-radius:12px}
+ .air-gesture-keyboard>header{font-size:8px;margin-bottom:6px}
+ .air-keyboard-row{gap:3px;margin-top:4px}
+ .air-keyboard-row>button{height:36px;border-radius:6px;font-size:12px}
+ .air-keyboard-actions>button{height:32px;font-size:9px}
+}
+@media(max-width:390px){
+ .air-launcher-grid{gap:7px}
+ .air-launcher-grid>button{padding:10px}
+ .air-gesture-keyboard{bottom:56px}
+ .air-keyboard-row>button{height:33px;font-size:11px}
+}
