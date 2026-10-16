@@ -278,3 +278,16 @@
 .theme-light .global-gesture-hover{outline-color:rgba(35,155,136,.72)!important;box-shadow:0 0 0 5px rgba(35,155,136,.09),0 0 20px rgba(35,155,136,.1)!important}
 @keyframes global-gesture-orbit{to{transform:rotate(360deg)}}
 @media(prefers-reduced-motion:reduce){.global-gesture-cursor>i{animation:none}}
+
+
+/* Home-level hands-free opt-in: the video is alive for MediaPipe but invisible. */
+.home-camera-feed{position:fixed!important;left:-4px!important;top:-4px!important;width:2px!important;height:2px!important;opacity:0!important;pointer-events:none!important;z-index:-1!important;border:0!important;object-fit:cover}
+.handsfree-home-toggle{white-space:nowrap}
+.handsfree-home-status{display:flex;align-items:center;gap:9px;margin-top:14px;padding:10px 12px;width:fit-content;max-width:100%;border:1px solid rgba(111,226,180,.2);border-radius:9px;background:rgba(111,226,180,.055);color:#a9e8d2;font-size:10px;line-height:1.6}
+.theme-light .handsfree-home-status{color:#267c66;background:rgba(55,180,139,.07);border-color:rgba(38,124,102,.16)}
+@media(max-width:700px){
+ .home-camera-feed{left:-2px!important;top:-2px!important}
+ .hero-actions{align-items:flex-start}
+ .handsfree-home-toggle{min-height:42px;padding:10px 12px;font-size:11px}
+ .handsfree-home-status{font-size:11px;width:100%}
+}
