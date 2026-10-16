@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import {
-  BatteryFull, ChevronDown, Clock3, Command, FileText, Globe2, Minus,
+  BatteryFull, ChevronDown, Palette, Command, FileText, Globe2, Minus,
   Music2, Search, ShieldCheck, TerminalSquare, Wifi, X,
 } from 'lucide-react';
 import type { HandInputRef } from '../vision/types';
@@ -28,6 +28,7 @@ export default function AirOSDesktop({ inputRef, cameraEnabled }: Props) {
   const cursorRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<DragState | null>(null);
   const lastPinchRef = useRef(false);
+  const lastGesturePositionRef = useRef({ x: Number.NaN, y: Number.NaN });
   const cameraRef = useRef(cameraEnabled);
   const windowsRef = useRef(initialWindows);
   const topZRef = useRef(5);
@@ -199,16 +200,27 @@ export default function AirOSDesktop({ inputRef, cameraEnabled }: Props) {
             topZRef.current += 1;
             focusWindow(id);
             dragRef.current = { id, startX: screenX, startY: screenY, originX: model.x, originY: model.y, source: 'gesture' };
+            lastGesturePositionRef.current = { x: screenX, y: screenY };
           }
         }
         if (hand.pinch && dragRef.current?.source === 'gesture') {
-          movePointer(screenX, screenY, dragRef.current);
+          const last = lastGesturePositionRef.current;
+          if (Math.abs(screenX - last.x) > 2.5 || Math.abs(screenY - last.y) > 2.5) {
+            movePointer(screenX, screenY, dragRef.current);
+            lastGesturePositionRef.current = { x: screenX, y: screenY };
+          }
         }
-        if (!hand.pinch && lastPinchRef.current && dragRef.current?.source === 'gesture') dragRef.current = null;
+        if (!hand.pinch && lastPinchRef.current && dragRef.current?.source === 'gesture') {
+          dragRef.current = null;
+          lastGesturePositionRef.current = { x: Number.NaN, y: Number.NaN };
+        }
         lastPinchRef.current = hand.pinch;
       } else {
         cursor.classList.remove('air-cursor-pinching');
-        if (lastPinchRef.current && dragRef.current?.source === 'gesture') dragRef.current = null;
+        if (lastPinchRef.current && dragRef.current?.source === 'gesture') {
+          dragRef.current = null;
+          lastGesturePositionRef.current = { x: Number.NaN, y: Number.NaN };
+        }
         lastPinchRef.current = false;
       }
       frame = requestAnimationFrame(tick);
@@ -274,7 +286,7 @@ export default function AirOSDesktop({ inputRef, cameraEnabled }: Props) {
           return <button key={id} className={isOpen ? 'dock-app dock-app-open' : 'dock-app'} onClick={() => openWindow(id)} aria-label={'Open ' + titles[id]} title={titles[id]}><Icon size={18} /><i /></button>;
         })}
         <span className="dock-divider" />
-        <button className="dock-app dock-settings" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} aria-label="Toggle desktop theme" title="Toggle theme"><Clock3 size={18} /><i /></button>
+        <button className="dock-app dock-settings" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} aria-label="Toggle desktop theme" title="Toggle theme"><Palette size={18} /><i /></button>
       </div>
 
       <div ref={cursorRef} className="air-hand-cursor"><span /><i /></div>
