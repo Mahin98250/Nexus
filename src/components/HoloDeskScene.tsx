@@ -184,7 +184,14 @@ export default function HoloDeskScene({ inputRef, cameraEnabled }: HoloDeskScene
 
       const input = inputRef.current;
       if (cameraEnabledRef.current && input.detected && input.pinch) {
-        target.set((input.x - 0.5) * 5.3, (0.5 - input.y) * 3.0, 0);
+        // Use the exact same camera-frustum mapping as mouse/touch dragging.
+        // This removes the old hard-coded 5.3 × 3.0 scaling offset.
+        const halfHeight = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.position.z;
+        target.set(
+          (input.x - 0.5) * halfHeight * camera.aspect * 2,
+          (0.5 - input.y) * halfHeight * 2,
+          0,
+        );
         displayedPinch = true;
         const angleDiff = Math.atan2(Math.sin(input.angle - smoothedAngle), Math.cos(input.angle - smoothedAngle));
         smoothedAngle += angleDiff * 0.19;
