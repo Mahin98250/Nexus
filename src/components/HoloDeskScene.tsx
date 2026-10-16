@@ -112,7 +112,6 @@ export default function HoloDeskScene({ inputRef, cameraEnabled }: HoloDeskScene
     let animationFrame = 0;
     let disposed = false;
     let lastTime = 0;
-    let lastInputTimestamp = -1;
     let displayedPinch = false;
     let smoothedAngle = 0;
 
@@ -159,10 +158,8 @@ export default function HoloDeskScene({ inputRef, cameraEnabled }: HoloDeskScene
         displayedPinch = true;
         const angleDiff = Math.atan2(Math.sin(input.angle - smoothedAngle), Math.cos(input.angle - smoothedAngle));
         smoothedAngle += angleDiff * 0.19;
-        lastInputTimestamp = input.timestamp;
       } else if (displayedPinch && (!input.detected || !input.pinch)) {
         displayedPinch = false;
-        lastInputTimestamp = input.timestamp;
       }
 
       if (pointerDragging) {
