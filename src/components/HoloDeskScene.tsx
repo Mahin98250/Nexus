@@ -12,6 +12,7 @@ export default function HoloDeskScene({ inputRef, cameraEnabled }: HoloDeskScene
   const cameraEnabledRef = useRef(cameraEnabled);
   const [webglUnavailable, setWebglUnavailable] = useState(false);
   const [fallbackOffset, setFallbackOffset] = useState({ x: 0, y: 0 });
+  const [fallbackRotation, setFallbackRotation] = useState(0);
   const fallbackDragRef = useRef<{ x: number; y: number; originX: number; originY: number } | null>(null);
   cameraEnabledRef.current = cameraEnabled;
 
@@ -28,6 +29,20 @@ export default function HoloDeskScene({ inputRef, cameraEnabled }: HoloDeskScene
       return;
     }
     setWebglUnavailable(false);
+    let disposed = false;
+    let rendererFailed = false;
+    const switchToFallback = () => {
+      if (disposed || rendererFailed) return;
+      rendererFailed = true;
+      host.classList.add('holo-scene-unavailable');
+      setWebglUnavailable(true);
+    };
+
+    const onWebGLContextLost = (event: Event) => {
+      event.preventDefault();
+      switchToFallback();
+    };
+    renderer.domElement.addEventListener('webglcontextlost', onWebGLContextLost);
 
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.25));
     renderer.setSize(Math.max(host.clientWidth, 1), Math.max(host.clientHeight, 1));
@@ -115,7 +130,6 @@ export default function HoloDeskScene({ inputRef, cameraEnabled }: HoloDeskScene
     const pointerTarget = new THREE.Vector3();
     let pointerDragging = false;
     let animationFrame = 0;
-    let disposed = false;
     let lastTime = 0;
     let displayedPinch = false;
     let smoothedAngle = 0;
@@ -142,17 +156,17 @@ export default function HoloDeskScene({ inputRef, cameraEnabled }: HoloDeskScene
     renderer.domElement.addEventListener('pointercancel', onPointerUp);
 
     const resizeObserver = new ResizeObserver(() => {
-      if (disposed) return;
+      if (disposed || rendererFailed) return;
       const width = Math.max(host.clientWidth, 1);
       const height = Math.max(host.clientHeight, 1);
       camera.aspect = width / height;
       camera.updateProjectionMatrix();
-      renderer.setSize(width, height);
+      try { renderer.setSize(width, height); } catch { switchToFallback(); }
     });
     resizeObserver.observe(host);
 
     const tick = (time: number) => {
-      if (disposed) return;
+      if (disposed || rendererFailed) return;
       animationFrame = requestAnimationFrame(tick);
       const delta = Math.min((time - (lastTime || time)) / 1000, 0.04);
       lastTime = time;
@@ -189,7 +203,11 @@ export default function HoloDeskScene({ inputRef, cameraEnabled }: HoloDeskScene
 
       const pulse = 1 + Math.sin(timeSeconds * 2.3) * 0.022;
       root.scale.setScalar(pulse * (displayedPinch ? 1.06 : 1));
-      renderer.render(scene, camera);
+      try {
+        renderer.render(scene, camera);
+      } catch {
+        switchToFallback();
+      }
     };
     animationFrame = requestAnimationFrame(tick);
 
@@ -201,7 +219,8 @@ export default function HoloDeskScene({ inputRef, cameraEnabled }: HoloDeskScene
       renderer.domElement.removeEventListener('pointermove', onPointerMove);
       renderer.domElement.removeEventListener('pointerup', onPointerUp);
       renderer.domElement.removeEventListener('pointercancel', onPointerUp);
-      renderer.dispose();
+      renderer.domElement.removeEventListener('webglcontextlost', onWebGLContextLost);
+      try { renderer.dispose(); } catch { /* Context may already be lost. */ }
       scene.traverse((object) => {
         if (object instanceof THREE.Mesh || object instanceof THREE.Points) {
           object.geometry.dispose();
@@ -212,6 +231,28 @@ export default function HoloDeskScene({ inputRef, cameraEnabled }: HoloDeskScene
       renderer.domElement.remove();
     };
   }, [inputRef]);
+
+  // Keep pinch-to-move available in the 2D fallback as well as normal WebGL mode.
+  useEffect(() => {
+    if (!webglUnavailable) return;
+    let frame = 0;
+    let lastUpdate = 0;
+    const updateFromHand = (now: number) => {
+      frame = requestAnimationFrame(updateFromHand);
+      if (now - lastUpdate < 33) return;
+      lastUpdate = now;
+      const input = inputRef.current;
+      const host = hostRef.current;
+      if (!host || !cameraEnabledRef.current || !input.detected || !input.pinch) return;
+      setFallbackOffset({
+        x: (input.x - 0.5) * Math.max(host.clientWidth, 1) * 0.7,
+        y: (input.y - 0.5) * Math.max(host.clientHeight, 1) * 0.7,
+      });
+      setFallbackRotation(THREE.MathUtils.radToDeg(input.angle));
+    };
+    frame = requestAnimationFrame(updateFromHand);
+    return () => cancelAnimationFrame(frame);
+  }, [webglUnavailable, inputRef]);
 
   return (
     <div ref={hostRef} className="holo-scene-layer">
@@ -233,7 +274,7 @@ export default function HoloDeskScene({ inputRef, cameraEnabled }: HoloDeskScene
         >
           <div className="holo-fallback-orbit holo-fallback-orbit-one" />
           <div className="holo-fallback-orbit holo-fallback-orbit-two" />
-          <div className="holo-fallback-core" style={{ transform: `translate(${fallbackOffset.x}px, ${fallbackOffset.y}px) rotate(${fallbackOffset.x * 0.3}deg)` }}>
+          <div className="holo-fallback-core" style={{ transform: `translate(${fallbackOffset.x}px, ${fallbackOffset.y}px) rotate(${fallbackRotation + fallbackOffset.x * 0.3}deg)` }}>
             <div className="holo-fallback-inner" />
           </div>
           <p>LIGHTWEIGHT HOLOGRAM · DRAG TO MOVE</p>
