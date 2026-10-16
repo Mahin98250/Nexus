@@ -59,6 +59,8 @@ export default function HoloDeskScene({ inputRef, cameraEnabled }: HoloDeskScene
     renderer.setSize(Math.max(host.clientWidth, 1), Math.max(host.clientHeight, 1));
     renderer.setClearColor(0x000000, 0);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.12;
     renderer.domElement.className = 'holo-canvas';
     renderer.domElement.setAttribute('aria-label', 'Interactive three-dimensional hologram. Drag with a mouse or hold a pinch gesture to move it.');
     host.prepend(renderer.domElement);
@@ -71,7 +73,7 @@ export default function HoloDeskScene({ inputRef, cameraEnabled }: HoloDeskScene
     const keyLight = new THREE.PointLight(0x9883ff, 45, 18);
     keyLight.position.set(2, 3, 5);
     scene.add(keyLight);
-    const cyanLight = new THREE.PointLight(0x57e4df, 24, 14);
+    const cyanLight = new THREE.PointLight(0x57e4df, 30, 14);
     cyanLight.position.set(-3, -1, 3);
     scene.add(cyanLight);
 
@@ -81,19 +83,19 @@ export default function HoloDeskScene({ inputRef, cameraEnabled }: HoloDeskScene
     const coreMaterial = new THREE.MeshPhysicalMaterial({
       color: 0x9b8cff,
       emissive: 0x5b3be0,
-      emissiveIntensity: 0.45,
+      emissiveIntensity: 0.58,
       metalness: 0.28,
       roughness: 0.24,
       transparent: true,
-      opacity: 0.78,
-      clearcoat: 0.8,
+      opacity: 0.84,
+      clearcoat: 1,
     });
     const core = new THREE.Mesh(new THREE.IcosahedronGeometry(0.86, lowPowerDevice ? 2 : 3), coreMaterial);
     root.add(core);
 
     const wire = new THREE.Mesh(
       new THREE.IcosahedronGeometry(0.94, 2),
-      new THREE.MeshBasicMaterial({ color: 0xc5baff, wireframe: true, transparent: true, opacity: 0.63 }),
+      new THREE.MeshBasicMaterial({ color: 0xd8d0ff, wireframe: true, transparent: true, opacity: 0.76 }),
     );
     root.add(wire);
 
