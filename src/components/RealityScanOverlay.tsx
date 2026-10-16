@@ -1,6 +1,17 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
 import { FilesetResolver, ObjectDetector } from '@mediapipe/tasks-vision';
 
+type TrackedObject = {
+  id: number;
+  label: string;
+  score: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  missed: number;
+};
+
 type Props = {
   active: boolean;
   videoRef: RefObject<HTMLVideoElement>;
@@ -32,6 +43,8 @@ export default function RealityScanOverlay({ active, videoRef }: Props) {
     let lastInference = 0;
     let detector: ObjectDetector | null = null;
     let detections: ReturnType<ObjectDetector['detectForVideo']>['detections'] = [];
+    let tracks: TrackedObject[] = [];
+    let nextTrackId = 1;
     let width = 1;
     let height = 1;
     let pixelRatio = 1;
@@ -57,11 +70,70 @@ export default function RealityScanOverlay({ active, videoRef }: Props) {
       if (now - lastInference > 80) {
         try {
           detections = detector?.detectForVideo(video, now).detections ?? [];
+          const matchedIds = new Set<number>();
+          const observed: TrackedObject[] = [];
+
+          for (const detection of detections) {
+            const box = detection.boundingBox;
+            if (!box) continue;
+            const classification = detection.categories[0];
+            const label = classification?.categoryName || 'object';
+            const centerX = box.originX + box.width / 2;
+            const centerY = box.originY + box.height / 2;
+            const maxDistance = Math.max(42, Math.hypot(box.width, box.height) * 0.8);
+            let best: TrackedObject | undefined;
+            let bestDistance = Number.POSITIVE_INFINITY;
+
+            for (const track of tracks) {
+              if (matchedIds.has(track.id) || track.label !== label) continue;
+              const distance = Math.hypot(
+                centerX - (track.x + track.width / 2),
+                centerY - (track.y + track.height / 2),
+              );
+              if (distance < maxDistance && distance < bestDistance) {
+                best = track;
+                bestDistance = distance;
+              }
+            }
+
+            if (best) {
+              matchedIds.add(best.id);
+              const blend = 0.64;
+              observed.push({
+                id: best.id,
+                label,
+                score: classification?.score ?? 0,
+                x: best.x * (1 - blend) + box.originX * blend,
+                y: best.y * (1 - blend) + box.originY * blend,
+                width: best.width * (1 - blend) + box.width * blend,
+                height: best.height * (1 - blend) + box.height * blend,
+                missed: 0,
+              });
+            } else {
+              observed.push({
+                id: nextTrackId++,
+                label,
+                score: classification?.score ?? 0,
+                x: box.originX,
+                y: box.originY,
+                width: box.width,
+                height: box.height,
+                missed: 0,
+              });
+            }
+          }
+
+          const brieflyLost = tracks
+            .filter((track) => !matchedIds.has(track.id) && track.missed < 2)
+            .map((track) => ({ ...track, missed: track.missed + 1, score: track.score * 0.85 }));
+          tracks = [...observed, ...brieflyLost];
+          if (countRef.current) {
+            countRef.current.textContent = detections.length + (detections.length === 1 ? ' object' : ' objects') + ' · ' + observed.length + ' tracks';
+          }
         } catch {
           setStatus('Frame skipped — recovering camera feed');
         }
         lastInference = now;
-        if (countRef.current) countRef.current.textContent = detections.length + (detections.length === 1 ? ' object' : ' objects');
       }
 
       context.clearRect(0, 0, width, height);
@@ -75,21 +147,20 @@ export default function RealityScanOverlay({ active, videoRef }: Props) {
       context.font = '600 ' + fontSize + 'px "DM Mono", monospace';
       context.textBaseline = 'middle';
 
-      detections.forEach((detection) => {
-        const box = detection.boundingBox;
-        if (!box) return;
-        // The webcam preview is mirrored with CSS; flip the detector box but keep labels readable.
-        const x = width - (offsetX + (box.originX + box.width) * scale);
-        const y = offsetY + box.originY * scale;
-        const boxWidth = box.width * scale;
-        const boxHeight = box.height * scale;
-        const classification = detection.categories[0];
-        const label = (classification?.categoryName || 'object') + ' ' +
-          Math.round((classification?.score ?? 0) * 100) + '%';
+      tracks.forEach((track) => {
+        // The webcam preview is mirrored with CSS; flip detector X while keeping labels readable.
+        const x = width - (offsetX + (track.x + track.width) * scale);
+        const y = offsetY + track.y * scale;
+        const boxWidth = track.width * scale;
+        const boxHeight = track.height * scale;
+        const faded = track.missed > 0;
+        const label = track.label + ' #' + String(track.id).padStart(2, '0') +
+          '  ' + Math.round(track.score * 100) + '%';
 
+        context.globalAlpha = faded ? 0.32 : 1;
         context.strokeStyle = '#76e9c7';
         context.shadowColor = 'rgba(118, 233, 199, 0.55)';
-        context.shadowBlur = 9;
+        context.shadowBlur = faded ? 2 : 9;
         context.strokeRect(x, y, boxWidth, boxHeight);
         context.shadowBlur = 0;
 
@@ -104,6 +175,7 @@ export default function RealityScanOverlay({ active, videoRef }: Props) {
         context.fillText(label, badgeX + 7, badgeY + badgeHeight / 2);
         context.fillStyle = 'rgba(118, 233, 199, 0.06)';
         context.fillRect(x, y, boxWidth, boxHeight);
+        context.globalAlpha = 1;
       });
     };
 
