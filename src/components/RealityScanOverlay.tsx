@@ -1,16 +1,6 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
 import { FilesetResolver, ObjectDetector } from '@mediapipe/tasks-vision';
-
-type TrackedObject = {
-  id: number;
-  label: string;
-  score: number;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  missed: number;
-};
+import { updateObjectTracks, type TrackedObject } from '../vision/objectTracks';
 
 type Props = {
   active: boolean;
@@ -70,65 +60,24 @@ export default function RealityScanOverlay({ active, videoRef }: Props) {
       if (now - lastInference > 80) {
         try {
           detections = detector?.detectForVideo(video, now).detections ?? [];
-          const matchedIds = new Set<number>();
-          const observed: TrackedObject[] = [];
-
-          for (const detection of detections) {
+          const candidates = detections.flatMap((detection) => {
             const box = detection.boundingBox;
-            if (!box) continue;
+            if (!box) return [];
             const classification = detection.categories[0];
-            const label = classification?.categoryName || 'object';
-            const centerX = box.originX + box.width / 2;
-            const centerY = box.originY + box.height / 2;
-            const maxDistance = Math.max(42, Math.hypot(box.width, box.height) * 0.8);
-            let best: TrackedObject | undefined;
-            let bestDistance = Number.POSITIVE_INFINITY;
-
-            for (const track of tracks) {
-              if (matchedIds.has(track.id) || track.label !== label) continue;
-              const distance = Math.hypot(
-                centerX - (track.x + track.width / 2),
-                centerY - (track.y + track.height / 2),
-              );
-              if (distance < maxDistance && distance < bestDistance) {
-                best = track;
-                bestDistance = distance;
-              }
-            }
-
-            if (best) {
-              matchedIds.add(best.id);
-              const blend = 0.64;
-              observed.push({
-                id: best.id,
-                label,
-                score: classification?.score ?? 0,
-                x: best.x * (1 - blend) + box.originX * blend,
-                y: best.y * (1 - blend) + box.originY * blend,
-                width: best.width * (1 - blend) + box.width * blend,
-                height: best.height * (1 - blend) + box.height * blend,
-                missed: 0,
-              });
-            } else {
-              observed.push({
-                id: nextTrackId++,
-                label,
-                score: classification?.score ?? 0,
-                x: box.originX,
-                y: box.originY,
-                width: box.width,
-                height: box.height,
-                missed: 0,
-              });
-            }
-          }
-
-          const brieflyLost = tracks
-            .filter((track) => !matchedIds.has(track.id) && track.missed < 2)
-            .map((track) => ({ ...track, missed: track.missed + 1, score: track.score * 0.85 }));
-          tracks = [...observed, ...brieflyLost];
+            return [{
+              label: classification?.categoryName || 'object',
+              score: classification?.score ?? 0,
+              x: box.originX,
+              y: box.originY,
+              width: box.width,
+              height: box.height,
+            }];
+          });
+          const update = updateObjectTracks(tracks, candidates, nextTrackId);
+          tracks = update.tracks;
+          nextTrackId = update.nextId;
           if (countRef.current) {
-            countRef.current.textContent = detections.length + (detections.length === 1 ? ' object' : ' objects') + ' · ' + observed.length + ' tracks';
+            countRef.current.textContent = detections.length + (detections.length === 1 ? ' object' : ' objects') + ' · ' + update.visible.length + ' tracks';
           }
         } catch {
           setStatus('Frame skipped — recovering camera feed');
