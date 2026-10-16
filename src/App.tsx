@@ -5,6 +5,9 @@ import {
   Settings2, ShieldCheck, Sparkles, Target, X,
 } from 'lucide-react';
 import { FilesetResolver, HandLandmarker } from '@mediapipe/tasks-vision';
+import HoloDeskScene from './components/HoloDeskScene';
+import { deriveHandInput } from './vision/gestures';
+import { EMPTY_HAND_INPUT, type HandInput } from './vision/types';
 
 type ExperienceId = 'holodesk' | 'shadowstrike' | 'airos' | 'realityscan';
 type Experience = {
@@ -56,6 +59,7 @@ export default function App() {
   const [handCount, setHandCount] = useState(0);
   const [fps, setFps] = useState(0);
   const [showHelp, setShowHelp] = useState(false);
+  const handInputRef = useRef<HandInput>({ ...EMPTY_HAND_INPUT });
   const videoRef = useRef<HTMLVideoElement>(null);
   const landmarkerRef = useRef<HandLandmarker | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -73,6 +77,7 @@ export default function App() {
     streamRef.current = null;
     if (videoRef.current) videoRef.current.srcObject = null;
     setCameraOn(false);
+    handInputRef.current = { ...EMPTY_HAND_INPUT };
     setHandCount(0);
     setFps(0);
     setCameraStatus('Camera is off');
@@ -100,14 +105,26 @@ export default function App() {
       await videoRef.current.play();
       setCameraStatus('Loading hand-tracking model…');
       const vision = await FilesetResolver.forVisionTasks(visionWasm);
-      const landmarker = await HandLandmarker.createFromOptions(vision, {
-        baseOptions: { modelAssetPath: handModel, delegate: 'GPU' },
-        runningMode: 'VIDEO',
+      const trackingOptions = {
+        runningMode: 'VIDEO' as const,
         numHands: 2,
         minHandDetectionConfidence: 0.55,
         minHandPresenceConfidence: 0.55,
         minTrackingConfidence: 0.55,
-      });
+      };
+      let landmarker: HandLandmarker;
+      try {
+        landmarker = await HandLandmarker.createFromOptions(vision, {
+          ...trackingOptions,
+          baseOptions: { modelAssetPath: handModel, delegate: 'GPU' },
+        });
+      } catch {
+        // Some browsers/devices do not support the GPU delegate; fall back to CPU.
+        landmarker = await HandLandmarker.createFromOptions(vision, {
+          ...trackingOptions,
+          baseOptions: { modelAssetPath: handModel, delegate: 'CPU' },
+        });
+      }
       landmarkerRef.current = landmarker;
       setCameraOn(true);
       setCameraStatus('Vision engine online');
@@ -119,6 +136,7 @@ export default function App() {
           return;
         }
         const result = tracker.detectForVideo(video, now);
+        handInputRef.current = deriveHandInput(result.landmarks[0], now);
         setHandCount(result.landmarks.length);
         frameCountRef.current += 1;
         if (now - lastFrameRef.current >= 1000) {
@@ -132,6 +150,7 @@ export default function App() {
     } catch (error) {
       streamRef.current?.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
+      handInputRef.current = { ...EMPTY_HAND_INPUT };
       landmarkerRef.current?.close();
       landmarkerRef.current = null;
       setCameraOn(false);
@@ -209,9 +228,9 @@ export default function App() {
                 <video ref={videoRef} className={cameraOn ? 'camera-video visible' : 'camera-video'} autoPlay playsInline muted />
                 {!cameraOn && <div className="camera-placeholder">
                   <div className="camera-orbit"><div className="orbit-ring orbit-ring-one" /><div className="orbit-ring orbit-ring-two" /><div className="camera-symbol"><Camera size={28} /></div></div>
-                  <h3>Give Nexus a point of view.</h3>
-                  <p>Enable your camera to initialize the shared vision engine.</p>
-                  <button className="button button-primary" onClick={() => void startCamera()}><Camera size={16} /> Enable camera</button>
+                  <h3>{activeExperience.id === 'holodesk' ? 'Touchless 3D is ready.' : 'Give Nexus a point of view.'}</h3>
+                  <p>{activeExperience.id === 'holodesk' ? 'Drag the hologram to move it. Enable the camera to grab it with a pinch.' : 'Enable your camera to initialize the shared vision engine.'}</p>
+                  {activeExperience.id !== 'holodesk' && <button className="button button-primary" onClick={() => void startCamera()}><Camera size={16} /> Enable camera</button>}
                   <span className="permission-note"><ShieldCheck size={13} /> Camera starts only when you ask</span>
                 </div>}
                 {cameraOn && <div className="tracking-overlay">
@@ -219,6 +238,7 @@ export default function App() {
                   <span className="tracking-counter">{String(handCount).padStart(2, '0')} HAND{handCount === 1 ? '' : 'S'}</span>
                   <div className="scanline" />
                 </div>}
+                {activeExperience.id === 'holodesk' && <HoloDeskScene inputRef={handInputRef} cameraEnabled={cameraOn} />}
               </div>
               <div className="camera-footer">
                 <span className="camera-status"><span className={cameraOn ? 'status-dot active' : 'status-dot'} /> {cameraStatus}</span>
