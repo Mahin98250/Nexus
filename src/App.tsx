@@ -73,6 +73,7 @@ export default function App() {
   const frameRef = useRef<number | null>(null);
   const cameraSessionRef = useRef(0);
   const lastFrameRef = useRef(0);
+  const lastVisionFrameRef = useRef(0);
   const frameCountRef = useRef(0);
   const activeExperience = experiences.find((item) => item.id === active) ?? null;
 
@@ -200,6 +201,12 @@ export default function App() {
           frameRef.current = requestAnimationFrame(loop);
           return;
         }
+        // Cap synchronous model inference to roughly 30 frames per second on slower devices.
+        if (now - lastVisionFrameRef.current < 33) {
+          frameRef.current = requestAnimationFrame(loop);
+          return;
+        }
+        lastVisionFrameRef.current = now;
         if (tracker) {
           const result = tracker.detectForVideo(video, now);
           handInputRef.current = deriveHandInput(result.landmarks[0], now);
@@ -244,10 +251,12 @@ export default function App() {
   }, [active]);
 
   useEffect(() => () => {
+    cameraSessionRef.current += 1;
     if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
     landmarkerRef.current?.close();
     poseLandmarkerRef.current?.close();
     streamRef.current?.getTracks().forEach((track) => track.stop());
+    if (videoRef.current) videoRef.current.srcObject = null;
   }, []);
 
   const openExperience = (id: ExperienceId) => {
@@ -274,7 +283,7 @@ export default function App() {
           <span className="connection-pill"><span className="status-dot" /> LOCAL VISION</span>
           <button className="icon-button" onClick={() => setShowHelp(true)} aria-label="Help"><CircleHelp size={18} /></button>
           <button className="icon-button" onClick={() => setShowHelp(true)} aria-label="Settings"><Settings2 size={18} /></button>
-          <div className="avatar">M</div>
+          <div className="avatar">NX</div>
         </div>
       </header>
 
@@ -305,7 +314,7 @@ export default function App() {
                 <span><span className={cameraOn ? 'status-dot active' : 'status-dot'} /> LIVE INPUT</span>
                 <span className="panel-topline-right">{cameraOn ? 'CAMERA CONNECTED' : 'AWAITING INPUT'}</span>
               </div>
-              <div className={'camera-stage ' + (cameraOn ? 'camera-stage-live' : '') + (activeExperience.id === 'holodesk' ? ' is-holodesk' : '') + (activeExperience.id === 'shadowstrike' ? ' is-shadowstrike' : '') + (activeExperience.id === 'airos' ? ' is-airos' : '')}>
+              <div className={'camera-stage ' + (cameraOn ? 'camera-stage-live' : '') + (activeExperience.id === 'holodesk' ? ' is-holodesk' : '') + (activeExperience.id === 'shadowstrike' ? ' is-shadowstrike' : '') + (activeExperience.id === 'airos' ? ' is-airos' : '') + (activeExperience.id === 'realityscan' ? ' is-realityscan' : '')}>
                 <video ref={videoRef} className={cameraOn ? 'camera-video visible' : 'camera-video'} autoPlay playsInline muted />
                 {!cameraOn && activeExperience.id !== 'shadowstrike' && activeExperience.id !== 'airos' && <div className="camera-placeholder">
                   <div className="camera-orbit"><div className="orbit-ring orbit-ring-one" /><div className="orbit-ring orbit-ring-two" /><div className="camera-symbol"><Camera size={28} /></div></div>
@@ -314,7 +323,7 @@ export default function App() {
                   {activeExperience.id !== 'holodesk' && <button className="button button-primary" onClick={() => void startCamera()}><Camera size={16} /> Enable camera</button>}
                   <span className="permission-note"><ShieldCheck size={13} /> Camera starts only when you ask</span>
                 </div>}
-                {cameraOn && activeExperience.id !== 'shadowstrike' && activeExperience.id !== 'realityscan' && <div className="tracking-overlay">
+                {cameraOn && activeExperience.id === 'holodesk' && <div className="tracking-overlay">
                   <span className="tracking-label"><span className="status-dot active" /> TRACKING ACTIVE</span>
                   <span className="tracking-counter">{String(handCount).padStart(2, '0')} HAND{handCount === 1 ? '' : 'S'}</span>
                   <div className="scanline" />
@@ -338,7 +347,7 @@ export default function App() {
               <div className="inspector-section">
                 <span className="field-label">VISION ENGINE</span>
                 <div className="metric-row"><span>Camera</span><span className={cameraOn ? 'metric-value online' : 'metric-value'}>{cameraOn ? 'Connected' : 'Standby'}</span></div>
-                <div className="metric-row"><span>Hand landmarks</span><span className="metric-value">{cameraOn ? handCount + ' detected' : 'Waiting'}</span></div>
+                <div className="metric-row"><span>{activeExperience.id === 'shadowstrike' ? 'Body pose' : activeExperience.id === 'realityscan' ? 'Object model' : 'Hand landmarks'}</span><span className="metric-value">{cameraOn ? (activeExperience.id === 'shadowstrike' ? (bodyInputRef.current.detected ? 'Detected' : 'Searching') : activeExperience.id === 'realityscan' ? 'Loading / active' : handCount + ' detected') : 'Waiting'}</span></div>
                 <div className="metric-row"><span>Frame rate</span><span className="metric-value">{cameraOn ? fps + ' FPS' : '—'}</span></div>
                 <div className="metric-row"><span>Processing</span><span className="metric-value">On-device</span></div>
               </div>
@@ -364,7 +373,7 @@ export default function App() {
               <button className="button button-primary" onClick={() => openExperience('holodesk')}><Play size={16} fill="currentColor" /> Enter the playground <ArrowRight size={16} /></button>
               <span className="hero-meta"><span className="status-dot active" /> 4 EXPERIENCES <span className="meta-divider">/</span> CAMERA OPTIONAL</span>
             </div>
-            <div className="hero-decoration" aria-hidden="true"><div className="hero-ring ring-a" /><div className="hero-ring ring-b" /><div className="hero-ring ring-c" /><div className="hero-center"><Hand size={42} strokeWidth={1.1} /></div><div className="hero-cross cross-a" /><div className="hero-cross cross-b" /><div className="hero-cross cross-c" /><div className="hero-coordinate">37° 46' 49.3&quot; N<br />122° 25' 09.1&quot; W</div><div className="hero-chip chip-a">GESTURE INPUT <span>READY</span></div><div className="hero-chip chip-b"><span className="status-dot active" /> REAL-TIME VISION</div></div>
+            <div className="hero-decoration" aria-hidden="true"><div className="hero-ring ring-a" /><div className="hero-ring ring-b" /><div className="hero-ring ring-c" /><div className="hero-center"><Hand size={42} strokeWidth={1.1} /></div><div className="hero-cross cross-a" /><div className="hero-cross cross-b" /><div className="hero-cross cross-c" /><div className="hero-coordinate">SPATIAL INPUT<br />3 AXES / LIVE</div><div className="hero-chip chip-a">GESTURE INPUT <span>READY</span></div><div className="hero-chip chip-b"><span className="status-dot active" /> REAL-TIME VISION</div></div>
           </div>
           <div className="section-heading">
             <div><div className="eyebrow"><span className="eyebrow-line" /> YOUR PLAYGROUND</div><h2>Choose your reality<span className="brand-period">.</span></h2></div>
