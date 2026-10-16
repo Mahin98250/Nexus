@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import {
   BatteryFull, ChevronDown, Palette, Command, FileText, Globe2, Minus,
-  Music2, Search, ShieldCheck, TerminalSquare, Wifi, X, Maximize2, Minimize2, RotateCcw, CircleHelp, Hand,
+  Music2, Search, ShieldCheck, TerminalSquare, Wifi, X, Maximize2, Minimize2, RotateCcw, CircleHelp,
 } from 'lucide-react';
 import type { HandInputRef } from '../vision/types';
 import { AirHandCursorSmoother } from '../vision/airHandEngine';
