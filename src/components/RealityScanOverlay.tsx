@@ -97,8 +97,8 @@ export default function RealityScanOverlay({ active, videoRef }: Props) {
       context.textBaseline = 'middle';
 
       tracks.forEach((track) => {
-        // The webcam preview is mirrored with CSS; flip detector X while keeping labels readable.
-        const x = width - (offsetX + (track.x + track.width) * scale);
+        // RealityScan uses the rear camera without mirroring, so model coordinates map directly.
+        const x = offsetX + track.x * scale;
         const y = offsetY + track.y * scale;
         const boxWidth = track.width * scale;
         const boxHeight = track.height * scale;
