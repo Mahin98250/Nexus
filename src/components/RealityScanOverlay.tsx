@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
 import type { ObjectDetector } from '@mediapipe/tasks-vision';
 import { updateObjectTracks, type TrackedObject } from '../vision/objectTracks';
+import { EFFICIENTDET_LITE0_MODEL_CANDIDATES } from '../vision/objectDetectionModels';
 
 type Props = {
   active: boolean;
@@ -18,19 +19,6 @@ const visionWasmCandidates = [
   `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${mediaPipeRuntimeVersion}/wasm`,
   `https://unpkg.com/@mediapipe/tasks-vision@${mediaPipeRuntimeVersion}/wasm`,
 ];
-// The official filename is efficientdet_lite0.tflite (not 1.tflite).
-// Use a pinned public mirror if Google Storage is blocked on the device's network.
-const objectModelCandidates = [
-  {
-    label: 'Google model',
-    url: 'https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite0/float32/1/efficientdet_lite0.tflite',
-  },
-  {
-    label: 'GitHub model mirror',
-    url: 'https://raw.githubusercontent.com/hugocornellier/object_detection/70eceb44d4fc8c32f7fbca8310d0fae7d0975870/assets/models/efficientdet_lite0.tflite',
-  },
-];
-
 export default function RealityScanOverlay({ active, videoRef, onStatusChange }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const countRef = useRef<HTMLSpanElement>(null);
@@ -205,7 +193,7 @@ export default function RealityScanOverlay({ active, videoRef, onStatusChange }:
         let loaded: ObjectDetector | null = null;
         let modelError: unknown = null;
         let loadedModelLabel = '';
-        for (const model of objectModelCandidates) {
+        for (const model of EFFICIENTDET_LITE0_MODEL_CANDIDATES) {
           for (const delegate of ['GPU', 'CPU'] as const) {
             try {
               loaded = await mediaPipeModule.ObjectDetector.createFromOptions(vision, {
