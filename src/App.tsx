@@ -146,7 +146,7 @@ export default function App() {
       const hand = handInputRef.current;
       // AirOS owns its internal cursor and window gestures. ShadowStrike uses
       // full-body controls, so avoid competing with its hand/body camera pipeline.
-      const enabled = cameraOn && active !== null && active !== 'airos' && active !== 'shadowstrike';
+      const enabled = cameraOn && active !== 'airos' && active !== 'shadowstrike';
       if (!enabled || !hand.detected) {
         cursor.style.visibility = 'hidden';
         clearHover();
@@ -178,7 +178,7 @@ export default function App() {
       globalPinchDownRef.current = hand.pinch;
       frame = requestAnimationFrame(tick);
     };
-    if (cameraOn && active && active !== 'airos' && active !== 'shadowstrike') {
+    if (cameraOn && active !== 'airos' && active !== 'shadowstrike') {
       frame = requestAnimationFrame(tick);
     } else {
       cursor.style.visibility = 'hidden';
@@ -664,7 +664,7 @@ export default function App() {
   }, [active]);
 
   useEffect(() => {
-    if (!active || !restartCameraAfterExperienceSwitchRef.current) return;
+    if (!restartCameraAfterExperienceSwitchRef.current) return;
     restartCameraAfterExperienceSwitchRef.current = false;
     // Wait until React has mounted the new experience's video element.
     const frame = window.requestAnimationFrame(() => { void startCamera(); });
@@ -690,6 +690,9 @@ export default function App() {
   };
 
   const goHome = () => {
+    // Keep a user's explicit hands-free opt-in when returning to Nexus Home.
+    // The hidden home video element mounts before the restart effect runs.
+    restartCameraAfterExperienceSwitchRef.current = cameraOn;
     stopCamera();
     setActive(null);
   };
@@ -791,14 +794,19 @@ export default function App() {
         </section>
       ) : (
         <section className="home">
+          <video ref={videoRef} className="home-camera-feed" autoPlay playsInline muted aria-hidden="true" tabIndex={-1} />
           <div className="hero">
             <div className="eyebrow"><span className="eyebrow-line" /> A NEW WAY TO INTERACT</div>
             <h1>The world<br />beyond <span className="gradient-text">touch.</span></h1>
             <p className="hero-copy">Four experimental experiences. One camera. A whole new way to play, create, and interact with the digital world.</p>
             <div className="hero-actions">
               <button className="button button-primary" onClick={() => openExperience('holodesk')}><Play size={16} fill="currentColor" /> Enter the playground <ArrowRight size={16} /></button>
-              <span className="hero-meta"><span className="status-dot active" /> 4 EXPERIENCES <span className="meta-divider">/</span> CAMERA OPTIONAL</span>
+              {cameraOn || cameraStarting
+                ? <button className="button button-secondary handsfree-home-toggle" onClick={stopCamera}><X size={15} /> {cameraStarting ? 'Cancel hands-free' : 'Stop hands-free'}</button>
+                : <button className="button button-secondary handsfree-home-toggle" onClick={() => void startCamera()}><Hand size={15} /> Enable hands-free</button>}
+              <span className="hero-meta"><span className={'status-dot ' + (cameraOn ? 'active' : '')} /> {cameraOn ? (handCount ? 'HAND CONTROL READY' : 'SHOW YOUR HAND') : '4 EXPERIENCES'} <span className="meta-divider">/</span> CAMERA OPTIONAL</span>
             </div>
+            {cameraOn && <div className="handsfree-home-status"><span className="status-dot active" /> {handCount > 0 ? 'Hand detected · pinch a highlighted control to activate it' : 'Hands-free is on · move your hand fully into the camera view'}</div>}
             <div className="hero-decoration" aria-hidden="true"><div className="hero-ring ring-a" /><div className="hero-ring ring-b" /><div className="hero-ring ring-c" /><div className="hero-center"><Hand size={42} strokeWidth={1.1} /></div><div className="hero-cross cross-a" /><div className="hero-cross cross-b" /><div className="hero-cross cross-c" /><div className="hero-coordinate">SPATIAL INPUT<br />3 AXES / LIVE</div><div className="hero-chip chip-a">GESTURE INPUT <span>READY</span></div><div className="hero-chip chip-b"><span className="status-dot active" /> REAL-TIME VISION</div></div>
           </div>
           <div className="section-heading">
