@@ -11,8 +11,24 @@ import RealityScanOverlay from './components/RealityScanOverlay';
 import HoloDeskScene from './components/HoloDeskScene';
 import { deriveHandInput } from './vision/gestures';
 import { deriveBodyInput } from './vision/bodyGestures';
+import { AirHandGestureStabilizer, type AirHandGesture } from './vision/airHandEngine';
 import { getRuntimeErrorDetails } from './vision/runtimeErrors';
-import { EMPTY_BODY_INPUT, EMPTY_HAND_INPUT, type BodyInput, type HandInput } from './vision/types';
+import { EMPTY_BODY_INPUT, EMPTY_HAND_INPUT, type BodyInput, type HandInput, type Landmark } from './vision/types';
+
+function getAirHandFrameGuidance(landmarks: readonly Landmark[] | undefined): string {
+  if (!landmarks || landmarks.length < 21) return '';
+  const xs = landmarks.map((point) => point.x);
+  const ys = landmarks.map((point) => point.y);
+  const left = Math.min(...xs), right = Math.max(...xs);
+  const top = Math.min(...ys), bottom = Math.max(...ys);
+  if (left < 0.055 || right > 0.945 || top < 0.055 || bottom > 0.945) {
+    return 'Hand near frame edge · move it toward the center';
+  }
+  const spanX = right - left, spanY = bottom - top;
+  if (spanX > 0.78 || spanY > 0.82) return 'Hand too close · move it a little farther away';
+  if (spanX < 0.16 && spanY < 0.20) return 'Hand looks small · move it a little closer';
+  return '';
+}
 
 type ExperienceId = 'holodesk' | 'shadowstrike' | 'airos' | 'realityscan';
 type Experience = {
@@ -90,8 +106,10 @@ export default function App() {
   const bodyInputRef = useRef<BodyInput>({ ...EMPTY_BODY_INPUT });
   const videoRef = useRef<HTMLVideoElement>(null);
   const gestureRecognizerRef = useRef<GestureRecognizer | null>(null);
+  const gestureStabilizerRef = useRef(new AirHandGestureStabilizer(110));
   const landmarkerRef = useRef<HandLandmarker | null>(null);
   const lastHandCountRef = useRef(-1);
+  const latestHandLandmarksRef = useRef<readonly Landmark[] | undefined>(undefined);
   const lastVideoTimeRef = useRef(-1);
   const poseLandmarkerRef = useRef<PoseLandmarker | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -111,9 +129,11 @@ export default function App() {
     frameRef.current = null;
     gestureRecognizerRef.current?.close();
     gestureRecognizerRef.current = null;
+    gestureStabilizerRef.current.reset();
     landmarkerRef.current?.close();
     landmarkerRef.current = null;
     lastHandCountRef.current = -1;
+    latestHandLandmarksRef.current = undefined;
     lastVideoTimeRef.current = -1;
     poseLandmarkerRef.current?.close();
     poseLandmarkerRef.current = null;
@@ -400,6 +420,7 @@ export default function App() {
       setCameraStatus('Vision engine online');
       lastVisionFrameRef.current = 0;
       lastVideoTimeRef.current = -1;
+      gestureStabilizerRef.current.reset();
       lastHandCountRef.current = -1;
       let consecutiveInferenceErrors = 0;
       let lastLoopStatus = '';
@@ -434,6 +455,7 @@ export default function App() {
             const result = recognizer.recognizeForVideo(video, now);
             const landmarks = result.landmarks ?? [];
             const topGesture = result.gestures?.[0]?.[0];
+            latestHandLandmarksRef.current = landmarks[0];
             handInputRef.current = deriveHandInput(
               landmarks[0], now, handInputRef.current.pinch,
               topGesture?.categoryName ?? null, topGesture?.score ?? 0,
@@ -442,6 +464,7 @@ export default function App() {
           } else if (tracker) {
             const result = tracker.detectForVideo(video, now);
             const landmarks = result.landmarks ?? [];
+            latestHandLandmarksRef.current = landmarks[0];
             handInputRef.current = deriveHandInput(landmarks[0], now, handInputRef.current.pinch);
             currentHandCount = landmarks.length;
           } else {
@@ -450,8 +473,19 @@ export default function App() {
         } catch (error) {
           inferenceFailed = true;
           handInputRef.current = { ...EMPTY_HAND_INPUT };
+          latestHandLandmarksRef.current = undefined;
+          gestureStabilizerRef.current.reset();
           if (consecutiveInferenceErrors === 0) console.warn('Nexus hand-tracking frame failed; retrying.', error);
         }
+        // AirHand stabilizes noisy gesture changes and releases immediately on tracking loss.
+        const stableGesture = gestureStabilizerRef.current.update(
+          (handInputRef.current.gesture ?? 'None') as AirHandGesture,
+          now,
+        );
+        handInputRef.current = {
+          ...handInputRef.current,
+          pinch: handInputRef.current.detected && stableGesture === 'Pinch',
+        };
         if (currentHandCount !== lastHandCountRef.current) {
           lastHandCountRef.current = currentHandCount;
           setHandCount(currentHandCount);
@@ -471,6 +505,7 @@ export default function App() {
         }
 
         if (inferenceFailed) {
+          latestHandLandmarksRef.current = undefined;
           consecutiveInferenceErrors += 1;
           publishLoopStatus(consecutiveInferenceErrors >= 8
             ? 'Vision inference failing · restart the camera'
@@ -478,8 +513,9 @@ export default function App() {
         } else {
           consecutiveInferenceErrors = 0;
           if (recognizer || tracker) {
+            const guidance = currentHandCount > 0 ? getAirHandFrameGuidance(latestHandLandmarksRef.current) : '';
             publishLoopStatus(currentHandCount > 0
-              ? 'Hand detected · ' + (recognizer ? 'AirHand gesture recognizer' : 'landmark fallback')
+              ? (guidance || 'Hand detected · ' + (recognizer ? 'AirHand gesture recognizer' : 'landmark fallback'))
               : 'Tracking ready · place your hand fully in frame');
           } else if (poseTracker) {
             publishLoopStatus('Pose tracking ready · stand inside the frame');
