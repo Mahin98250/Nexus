@@ -30,7 +30,6 @@ export default function AirOSDesktop({ inputRef, cameraEnabled }: Props) {
   const lastPinchRef = useRef(false);
   const lastGesturePositionRef = useRef({ x: Number.NaN, y: Number.NaN });
   const smoothedHandPositionRef = useRef({ x: 0.5, y: 0.5, initialized: false });
-  const lastGesturePositionRef = useRef({ x: Number.NaN, y: Number.NaN });
   const cameraRef = useRef(cameraEnabled);
   const windowsRef = useRef(initialWindows);
   const topZRef = useRef(5);
