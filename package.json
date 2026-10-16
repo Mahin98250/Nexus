@@ -8,7 +8,8 @@
     "build": "tsc -b && vite build",
     "typecheck": "tsc -b --pretty",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "build:pages": "tsc -b && vite build --base=/Nexus/"
   },
   "dependencies": {
     "@mediapipe/tasks-vision": "^0.10.22",
