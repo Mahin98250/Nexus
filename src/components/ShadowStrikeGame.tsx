@@ -142,16 +142,20 @@ export default function ShadowStrikeGame({ bodyInputRef, cameraEnabled }: Props)
       const body = cameraRef.current ? bodyInputRef.current : undefined;
       const hasBody = Boolean(body?.detected);
       const keys = controlsRef.current;
-      let desiredX = game.playerX;
-      if (hasBody && body) desiredX = body.x;
-      else if (keys.left !== keys.right) desiredX += keys.left ? -delta * 1.35 : delta * 1.35;
-      desiredX = Math.max(0.08, Math.min(0.92, desiredX));
-      game.playerX += (desiredX - game.playerX) * (1 - Math.exp(-delta * 10));
-
       const attack = Boolean((hasBody && body?.attack) || keys.attack);
       const jump = Boolean(hasBody && body?.jump);
-      if (attack && !game.lastAttack) game.punchUntil = now + 280;
-      if (jump && !game.lastJump) game.jumpUntil = now + 520;
+
+      // Freeze player input while paused or after game over, but keep edge-state
+      // synchronized so holding a gesture does not fire unexpectedly on resume.
+      if (game.phase === 'playing') {
+        let desiredX = game.playerX;
+        if (hasBody && body) desiredX = body.x;
+        else if (keys.left !== keys.right) desiredX += keys.left ? -delta * 1.35 : delta * 1.35;
+        desiredX = Math.max(0.08, Math.min(0.92, desiredX));
+        game.playerX += (desiredX - game.playerX) * (1 - Math.exp(-delta * 10));
+        if (attack && !game.lastAttack) game.punchUntil = now + 280;
+        if (jump && !game.lastJump) game.jumpUntil = now + 520;
+      }
       game.lastAttack = attack;
       game.lastJump = jump;
 
@@ -284,7 +288,7 @@ export default function ShadowStrikeGame({ bodyInputRef, cameraEnabled }: Props)
           <button aria-label="Jump or strike" onPointerDown={() => { controlsRef.current.attack = true; }} onPointerUp={() => { controlsRef.current.attack = false; }} onPointerLeave={() => { controlsRef.current.attack = false; }} onPointerCancel={() => { controlsRef.current.attack = false; }}><ArrowUp size={18} /></button>
           <button aria-label="Move right" onPointerDown={() => { controlsRef.current.right = true; }} onPointerUp={() => { controlsRef.current.right = false; }} onPointerLeave={() => { controlsRef.current.right = false; }} onPointerCancel={() => { controlsRef.current.right = false; }}><ArrowRight size={18} /></button>
         </div>
-        <button className="game-pause" onClick={() => changePhase(phase === 'paused' ? 'playing' : 'paused')} aria-label={phase === 'paused' ? 'Resume game' : 'Pause game'}><Pause size={14} /> {phase === 'paused' ? 'RESUME' : 'PAUSE'}</button>
+        {phase !== 'over' && <button className="game-pause" onClick={() => changePhase(phase === 'paused' ? 'playing' : 'paused')} aria-label={phase === 'paused' ? 'Resume game' : 'Pause game'}><Pause size={14} /> {phase === 'paused' ? 'RESUME' : 'PAUSE'}</button>}
       </div>
     </div>
   );
