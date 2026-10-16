@@ -181,7 +181,7 @@ export default function RealityScanOverlay({ active, videoRef }: Props) {
             baseOptions: { modelAssetPath: objectModel, delegate: 'GPU' },
           });
         } catch {
-          loaded = await ObjectDetector.createFromOptions(vision, {
+          loaded = await mediaPipeModule.ObjectDetector.createFromOptions(vision, {
             ...options,
             baseOptions: { modelAssetPath: objectModel, delegate: 'CPU' },
           });
