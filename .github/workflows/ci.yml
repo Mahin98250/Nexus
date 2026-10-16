@@ -29,3 +29,5 @@ jobs:
         run: npm run test
       - name: Build
         run: npm run build
+      - name: Build for GitHub Pages
+        run: npm run build:pages
