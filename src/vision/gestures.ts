@@ -9,6 +9,7 @@ const distance = (a: Landmark, b: Landmark) =>
 export function deriveHandInput(
   landmarks: readonly Landmark[] | undefined,
   timestamp: number,
+  previousPinch = false,
 ): HandInput {
   if (!landmarks || landmarks.length < 21) {
     return {
@@ -38,7 +39,8 @@ export function deriveHandInput(
     detected: true,
     x: clamp(1 - centerX, 0, 1),
     y: clamp(centerY, 0, 1),
-    pinch: pinchRatio < 0.38,
+    // Hysteresis prevents a shaky fingertip estimate from repeatedly dropping a held pinch.
+    pinch: pinchRatio < (previousPinch ? 0.48 : 0.36),
     openness: clamp((fingerSpread - 1.0) / 1.55, 0, 1),
     angle: Math.atan2(indexMcp.y - pinkyMcp.y, indexMcp.x - pinkyMcp.x),
     timestamp,
