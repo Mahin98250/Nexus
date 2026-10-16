@@ -89,3 +89,17 @@
 .realityscan-count{color:#e1fff4;border-color:rgba(118,233,199,.13)}
 .camera-stage.is-realityscan:not(.camera-stage-live) .camera-placeholder{padding-bottom:55px}
 @media(max-width:700px){.realityscan-topline{top:9px;left:9px;right:9px}.realityscan-bottomline{left:9px;right:9px;bottom:9px;font-size:6px;padding:7px 8px}.realityscan-mode,.realityscan-count{padding:7px 8px;font-size:7px}}
+
+
+/* HoloDesk graceful fallback for browsers where WebGL cannot initialize. */
+.holo-fallback-scene{position:absolute;inset:0;z-index:2;display:grid;place-items:center;overflow:hidden;pointer-events:auto;touch-action:none;cursor:grab;background:radial-gradient(ellipse at center,rgba(94,75,204,.19),transparent 58%)}
+.holo-fallback-scene:active{cursor:grabbing}
+.holo-fallback-orbit{position:absolute;width:min(58vw,270px);height:min(58vw,270px);border:1px solid rgba(157,141,255,.52);border-radius:50%;box-shadow:0 0 28px rgba(131,112,255,.1),inset 0 0 24px rgba(131,112,255,.08);pointer-events:none}
+.holo-fallback-orbit-one{transform:rotateX(68deg) rotateZ(-24deg);animation:holo-fallback-spin 12s linear infinite}
+.holo-fallback-orbit-two{width:min(72vw,330px);height:min(38vw,175px);border-color:rgba(87,228,223,.4);transform:rotate(-32deg);animation:holo-fallback-spin 17s linear infinite reverse}
+.holo-fallback-core{width:104px;height:104px;display:grid;place-items:center;border:1px solid rgba(203,194,255,.9);border-radius:28px;background:linear-gradient(145deg,rgba(162,142,255,.65),rgba(67,54,151,.38));box-shadow:0 0 34px rgba(134,108,255,.55),inset 0 0 22px rgba(255,255,255,.18);backdrop-filter:blur(5px);pointer-events:none;animation:holo-fallback-float 3s ease-in-out infinite}
+.holo-fallback-inner{width:44px;height:44px;border:1px solid #8bf4e9;border-radius:13px;transform:rotate(45deg);background:linear-gradient(135deg,rgba(114,245,232,.55),rgba(87,95,221,.45));box-shadow:0 0 24px rgba(94,232,221,.8)}
+.holo-fallback-scene p{position:absolute;bottom:44px;margin:0;font:8px var(--mono);letter-spacing:1.5px;color:#a5a0d8;pointer-events:none}
+@keyframes holo-fallback-spin{from{rotate:0deg}to{rotate:360deg}}
+@keyframes holo-fallback-float{0%,100%{translate:0 -5px}50%{translate:0 5px}}
+@media(prefers-reduced-motion:reduce){.holo-fallback-orbit,.holo-fallback-core{animation:none}}

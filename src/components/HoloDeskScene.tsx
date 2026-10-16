@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import type { HandInputRef } from '../vision/types';
 
@@ -10,6 +10,9 @@ type HoloDeskSceneProps = {
 export default function HoloDeskScene({ inputRef, cameraEnabled }: HoloDeskSceneProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const cameraEnabledRef = useRef(cameraEnabled);
+  const [webglUnavailable, setWebglUnavailable] = useState(false);
+  const [fallbackOffset, setFallbackOffset] = useState({ x: 0, y: 0 });
+  const fallbackDragRef = useRef<{ x: number; y: number; originX: number; originY: number } | null>(null);
   cameraEnabledRef.current = cameraEnabled;
 
   useEffect(() => {
@@ -18,14 +21,16 @@ export default function HoloDeskScene({ inputRef, cameraEnabled }: HoloDeskScene
 
     let renderer: THREE.WebGLRenderer;
     try {
-      renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true, powerPreference: 'low-power' });
+      renderer = new THREE.WebGLRenderer({ alpha: true, antialias: false, powerPreference: 'default', failIfMajorPerformanceCaveat: false });
     } catch {
+      setWebglUnavailable(true);
       host.classList.add('holo-scene-unavailable');
       return;
     }
+    setWebglUnavailable(false);
 
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
-    renderer.setSize(host.clientWidth, host.clientHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.25));
+    renderer.setSize(Math.max(host.clientWidth, 1), Math.max(host.clientHeight, 1));
     renderer.setClearColor(0x000000, 0);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.domElement.className = 'holo-canvas';
@@ -210,8 +215,32 @@ export default function HoloDeskScene({ inputRef, cameraEnabled }: HoloDeskScene
 
   return (
     <div ref={hostRef} className="holo-scene-layer">
+      {webglUnavailable && (
+        <div
+          className="holo-fallback-scene"
+          onPointerDown={(event) => {
+            event.currentTarget.setPointerCapture(event.pointerId);
+            fallbackDragRef.current = { x: event.clientX, y: event.clientY, originX: fallbackOffset.x, originY: fallbackOffset.y };
+          }}
+          onPointerMove={(event) => {
+            const drag = fallbackDragRef.current;
+            if (!drag) return;
+            setFallbackOffset({ x: drag.originX + event.clientX - drag.x, y: drag.originY + event.clientY - drag.y });
+          }}
+          onPointerUp={() => { fallbackDragRef.current = null; }}
+          onPointerCancel={() => { fallbackDragRef.current = null; }}
+          aria-label="Interactive lightweight hologram fallback. Drag to move."
+        >
+          <div className="holo-fallback-orbit holo-fallback-orbit-one" />
+          <div className="holo-fallback-orbit holo-fallback-orbit-two" />
+          <div className="holo-fallback-core" style={{ transform: `translate(${fallbackOffset.x}px, ${fallbackOffset.y}px) rotate(${fallbackOffset.x * 0.3}deg)` }}>
+            <div className="holo-fallback-inner" />
+          </div>
+          <p>LIGHTWEIGHT HOLOGRAM · DRAG TO MOVE</p>
+        </div>
+      )}
       <div className="holo-scene-hud"><span className={cameraEnabled ? 'status-dot active' : 'status-dot'} /> {cameraEnabled ? 'PINCH TO GRAB' : 'DRAG TO INTERACT'}</div>
-      <div className="holo-scene-footnote">NEXUS SPATIAL ENGINE <span>·</span> LIVE SCENE</div>
+      <div className="holo-scene-footnote">NEXUS SPATIAL ENGINE <span>·</span> {webglUnavailable ? 'FALLBACK SCENE' : 'LIVE SCENE'}</div>
     </div>
   );
 }
