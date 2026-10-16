@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import {
   BatteryFull, ChevronDown, Palette, Command, FileText, Globe2, Minus,
-  Music2, Search, ShieldCheck, TerminalSquare, Wifi, X, Maximize2, Minimize2, RotateCcw, CircleHelp,
+  Music2, Search, ShieldCheck, TerminalSquare, Wifi, X, Maximize2, Minimize2, RotateCcw, CircleHelp, Move3D, Target, ScanLine,
 } from 'lucide-react';
 import type { HandInputRef } from '../vision/types';
 import { AirHandCursorSmoother } from '../vision/airHandEngine';
 
 type WindowId = 'browser' | 'notes' | 'terminal' | 'music';
+type NexusModeId = 'holodesk' | 'shadowstrike' | 'airos' | 'realityscan';
 type AirWindow = { id: WindowId; x: number; y: number; z: number; minimized: boolean; closed: boolean };
 type DragState = { id: WindowId; startX: number; startY: number; originX: number; originY: number; source: 'pointer' | 'gesture' };
 
@@ -20,11 +21,14 @@ const titles: Record<WindowId, string> = {
   browser: 'Nexus Browser', notes: 'Quick Notes', terminal: 'Terminal', music: 'Ambient Player',
 };
 const icons = { browser: Globe2, notes: FileText, terminal: TerminalSquare, music: Music2 };
+const modeTitles: Record<NexusModeId, string> = { holodesk: 'HoloDesk', shadowstrike: 'ShadowStrike', airos: 'AirOS', realityscan: 'RealityScan Live' };
+const modeIcons = { holodesk: Move3D, shadowstrike: Target, airos: Command, realityscan: ScanLine };
+const modeIds: NexusModeId[] = ['holodesk', 'shadowstrike', 'airos', 'realityscan'];
 const clamp = (value: number, low: number, high: number) => Math.max(low, Math.min(high, value));
 
-type Props = { inputRef: HandInputRef; cameraEnabled: boolean };
+type Props = { inputRef: HandInputRef; cameraEnabled: boolean; onSwitchExperience: (id: NexusModeId) => void };
 
-export default function AirOSDesktop({ inputRef, cameraEnabled }: Props) {
+export default function AirOSDesktop({ inputRef, cameraEnabled, onSwitchExperience }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const cursorRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<DragState | null>(null);
@@ -38,7 +42,12 @@ export default function AirOSDesktop({ inputRef, cameraEnabled }: Props) {
   const oscillatorRef = useRef<OscillatorNode | null>(null);
   const lfoRef = useRef<OscillatorNode | null>(null);
   const gainRef = useRef<GainNode | null>(null);
-  const [windows, setWindows] = useState<AirWindow[]>(initialWindows);
+  const [windows, setWindows] = useState<AirWindow[]>(() => {
+    const compact = typeof window !== 'undefined' && window.matchMedia('(max-width: 700px)').matches;
+    return initialWindows.map((item) => compact && item.id !== 'browser'
+      ? { ...item, minimized: true, x: 2, y: 8 }
+      : item);
+  });
   const [note, setNote] = useState(() => {
     try { return localStorage.getItem('nexus-air-note') ?? 'Ideas for the next build…'; }
     catch { return 'Ideas for the next build…'; }
@@ -52,6 +61,7 @@ export default function AirOSDesktop({ inputRef, cameraEnabled }: Props) {
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [maximizedWindow, setMaximizedWindow] = useState<WindowId | null>(null);
   const [showLauncher, setShowLauncher] = useState(false);
+  const hoveredTargetRef = useRef<HTMLElement | null>(null);
   const [launcherQuery, setLauncherQuery] = useState('');
   const [showGestureGuide, setShowGestureGuide] = useState(false);
   cameraRef.current = cameraEnabled;
@@ -70,9 +80,11 @@ export default function AirOSDesktop({ inputRef, cameraEnabled }: Props) {
 
   const openWindow = (id: WindowId) => {
     topZRef.current += 1;
-    setWindows((current) => current.map((item) => item.id === id
-      ? { ...item, z: topZRef.current, minimized: false, closed: false }
-      : item));
+    const compact = typeof window !== 'undefined' && window.matchMedia('(max-width: 700px)').matches;
+    setWindows((current) => current.map((item) => {
+      if (item.id === id) return { ...item, x: compact ? 2 : item.x, y: compact ? 7 : item.y, z: topZRef.current, minimized: false, closed: false };
+      return compact ? { ...item, minimized: true } : item;
+    }));
     setShowLauncher(false);
     setLauncherQuery('');
   };
@@ -217,6 +229,10 @@ export default function AirOSDesktop({ inputRef, cameraEnabled }: Props) {
       const cursor = cursorRef.current;
       const detected = Boolean(hand?.detected);
       cursor.style.visibility = detected ? 'visible' : 'hidden';
+      if (!detected && hoveredTargetRef.current) {
+        hoveredTargetRef.current.classList.remove('air-hand-hover');
+        hoveredTargetRef.current = null;
+      }
       if (detected && hand) {
         const smooth = smoothedHandPositionRef.current.update(hand.x, hand.y, performance.now());
         cursor.style.left = (smooth.x * 100) + '%';
@@ -225,16 +241,30 @@ export default function AirOSDesktop({ inputRef, cameraEnabled }: Props) {
         const rect = host.getBoundingClientRect();
         const screenX = rect.left + smooth.x * rect.width;
         const screenY = rect.top + smooth.y * rect.height;
+        const hitElement = document.elementFromPoint(screenX, screenY) as HTMLElement | null;
+        const hoverTarget = hitElement?.closest<HTMLElement>('button, [role="button"], [data-air-window-title], input, textarea, select');
+        if (hoveredTargetRef.current !== hoverTarget) {
+          hoveredTargetRef.current?.classList.remove('air-hand-hover');
+          hoverTarget?.classList.add('air-hand-hover');
+          hoveredTargetRef.current = hoverTarget ?? null;
+        }
         if (hand.pinch && !lastPinchRef.current) {
-          const hit = document.elementFromPoint(screenX, screenY)?.closest<HTMLElement>('[data-air-window-title]');
-          const id = hit?.dataset.airWindowTitle as WindowId | undefined;
-          const model = id ? windowsRef.current.find((item) => item.id === id && !item.closed && !item.minimized) : undefined;
-          if (id && model) {
-            topZRef.current += 1;
-            focusWindow(id);
-            dragRef.current = { id, startX: screenX, startY: screenY, originX: model.x, originY: model.y, source: 'gesture' };
-            lastGesturePositionRef.current = { x: screenX, y: screenY };
-            lastGesturePositionRef.current = { x: screenX, y: screenY };
+          const inputTarget = hitElement?.closest<HTMLElement>('input, textarea, select');
+          const buttonTarget = hitElement?.closest<HTMLElement>('button:not(:disabled), [role="button"], [data-air-gesture-click]');
+          if (inputTarget && host.contains(inputTarget)) {
+            inputTarget.focus();
+          } else if (buttonTarget && host.contains(buttonTarget)) {
+            buttonTarget.click();
+          } else {
+            const titleHit = hitElement?.closest<HTMLElement>('[data-air-window-title]');
+            const id = titleHit?.dataset.airWindowTitle as WindowId | undefined;
+            const model = id ? windowsRef.current.find((item) => item.id === id && !item.closed && !item.minimized) : undefined;
+            if (id && model && maximizedWindow !== id) {
+              topZRef.current += 1;
+              focusWindow(id);
+              dragRef.current = { id, startX: screenX, startY: screenY, originX: model.x, originY: model.y, source: 'gesture' };
+              lastGesturePositionRef.current = { x: screenX, y: screenY };
+            }
           }
         }
         if (hand.pinch && dragRef.current?.source === 'gesture') {
@@ -251,6 +281,7 @@ export default function AirOSDesktop({ inputRef, cameraEnabled }: Props) {
         lastPinchRef.current = hand.pinch;
       } else {
         cursor.classList.remove('air-cursor-pinching');
+        if (hoveredTargetRef.current) { hoveredTargetRef.current.classList.remove('air-hand-hover'); hoveredTargetRef.current = null; }
         if (lastPinchRef.current && dragRef.current?.source === 'gesture') {
           dragRef.current = null;
           lastGesturePositionRef.current = { x: Number.NaN, y: Number.NaN };
