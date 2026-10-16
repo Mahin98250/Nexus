@@ -4,10 +4,13 @@ import {
   Hand, Layers3, Maximize2, Monitor, Move3D, Play, ScanLine,
   Settings2, ShieldCheck, Sparkles, Target, X,
 } from 'lucide-react';
-import { FilesetResolver, HandLandmarker } from '@mediapipe/tasks-vision';
+import { FilesetResolver, HandLandmarker, PoseLandmarker } from '@mediapipe/tasks-vision';
+import ShadowStrikeGame from './components/ShadowStrikeGame';
+import RealityScanOverlay from './components/RealityScanOverlay';
 import HoloDeskScene from './components/HoloDeskScene';
 import { deriveHandInput } from './vision/gestures';
-import { EMPTY_HAND_INPUT, type HandInput } from './vision/types';
+import { deriveBodyInput } from './vision/bodyGestures';
+import { EMPTY_BODY_INPUT, EMPTY_HAND_INPUT, type BodyInput, type HandInput } from './vision/types';
 
 type ExperienceId = 'holodesk' | 'shadowstrike' | 'airos' | 'realityscan';
 type Experience = {
@@ -26,31 +29,32 @@ const experiences: Experience[] = [
   {
     id: 'holodesk', number: '01', title: 'HoloDesk', category: 'SPATIAL PLAYGROUND',
     description: 'Bring objects to life with your hands.',
-    detail: 'Explore a touchless 3D workspace. The shared vision engine is the first building block for natural grab, rotate, and scale interactions.',
+    detail: 'Grab the hologram with a pinch, move it through space, and rotate it with your wrist. Mouse and touch dragging work without camera access too.',
     icon: Move3D, accent: 'violet', tags: ['Hand tracking', '3D space', 'Spatial input'],
   },
   {
     id: 'shadowstrike', number: '02', title: 'ShadowStrike', category: 'MOTION ARCADE',
     description: 'Your movement. Your controls. Your game.',
-    detail: 'A motion-controlled arcade experience. The next milestone adds body pose tracking, movement calibration, and responsive game physics.',
+    detail: 'Move your body to steer through an arcade arena. Raise a hand to strike targets, jump to dodge, and use keyboard or touch controls as a fallback.',
     icon: Target, accent: 'orange', tags: ['Body tracking', 'Arcade', 'Motion input'],
   },
   {
     id: 'airos', number: '03', title: 'AirOS', category: 'TOUCHLESS WORKSPACE',
     description: 'A desktop that listens to gestures.',
-    detail: 'A browser-based desktop concept with gesture-driven interactions. It controls its own interface, not the entire operating system.',
+    detail: 'An interactive browser desktop with movable windows and mini apps. Gestures control this workspace; it does not take over the operating system.',
     icon: Monitor, accent: 'blue', tags: ['Floating windows', 'Gesture UI', 'Mini apps'],
   },
   {
     id: 'realityscan', number: '04', title: 'RealityScan Live', category: 'COMPUTER VISION',
     description: 'See the world through a smarter lens.',
-    detail: 'A camera workspace for experimenting with real-time vision. Hand tracking is available now; general object detection is a separate next step.',
+    detail: 'Detect everyday objects through the live camera and draw confidence-labelled tracking boxes in real time. Detection runs locally in the browser.',
     icon: ScanLine, accent: 'mint', tags: ['Live camera', 'Vision tools', 'Local processing'],
   },
 ];
 
 const visionWasm = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/wasm';
 const handModel = 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task';
+const poseModel = 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task';
 
 export default function App() {
   const [active, setActive] = useState<ExperienceId | null>(null);
@@ -60,8 +64,10 @@ export default function App() {
   const [fps, setFps] = useState(0);
   const [showHelp, setShowHelp] = useState(false);
   const handInputRef = useRef<HandInput>({ ...EMPTY_HAND_INPUT });
+  const bodyInputRef = useRef<BodyInput>({ ...EMPTY_BODY_INPUT });
   const videoRef = useRef<HTMLVideoElement>(null);
   const landmarkerRef = useRef<HandLandmarker | null>(null);
+  const poseLandmarkerRef = useRef<PoseLandmarker | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const frameRef = useRef<number | null>(null);
   const lastFrameRef = useRef(0);
@@ -73,6 +79,9 @@ export default function App() {
     frameRef.current = null;
     landmarkerRef.current?.close();
     landmarkerRef.current = null;
+    poseLandmarkerRef.current?.close();
+    poseLandmarkerRef.current = null;
+    bodyInputRef.current = { ...EMPTY_BODY_INPUT };
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
     if (videoRef.current) videoRef.current.srcObject = null;
@@ -103,8 +112,10 @@ export default function App() {
       }
       videoRef.current.srcObject = stream;
       await videoRef.current.play();
-      setCameraStatus('Loading hand-tracking model…');
+      setCameraStatus(active === 'shadowstrike' ? 'Loading pose-tracking model…' : active === 'realityscan' ? 'Preparing object detector…' : 'Loading hand-tracking model…');
       const vision = await FilesetResolver.forVisionTasks(visionWasm);
+      const trackHands = active !== 'shadowstrike' && active !== 'realityscan';
+      const trackBody = active === 'shadowstrike';
       const trackingOptions = {
         runningMode: 'VIDEO' as const,
         numHands: 2,
@@ -112,32 +123,68 @@ export default function App() {
         minHandPresenceConfidence: 0.55,
         minTrackingConfidence: 0.55,
       };
-      let landmarker: HandLandmarker;
-      try {
-        landmarker = await HandLandmarker.createFromOptions(vision, {
-          ...trackingOptions,
-          baseOptions: { modelAssetPath: handModel, delegate: 'GPU' },
-        });
-      } catch {
-        // Some browsers/devices do not support the GPU delegate; fall back to CPU.
-        landmarker = await HandLandmarker.createFromOptions(vision, {
-          ...trackingOptions,
-          baseOptions: { modelAssetPath: handModel, delegate: 'CPU' },
-        });
+      if (trackHands) {
+        let landmarker: HandLandmarker;
+        try {
+          landmarker = await HandLandmarker.createFromOptions(vision, {
+            ...trackingOptions,
+            baseOptions: { modelAssetPath: handModel, delegate: 'GPU' },
+          });
+        } catch {
+          landmarker = await HandLandmarker.createFromOptions(vision, {
+            ...trackingOptions,
+            baseOptions: { modelAssetPath: handModel, delegate: 'CPU' },
+          });
+        }
+        landmarkerRef.current = landmarker;
       }
-      landmarkerRef.current = landmarker;
+      if (trackBody) {
+        const poseOptions = {
+          runningMode: 'VIDEO' as const,
+          numPoses: 1,
+          minPoseDetectionConfidence: 0.55,
+          minPosePresenceConfidence: 0.55,
+          minTrackingConfidence: 0.55,
+          outputSegmentationMasks: false,
+        };
+        let poseLandmarker: PoseLandmarker;
+        try {
+          poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
+            ...poseOptions,
+            baseOptions: { modelAssetPath: poseModel, delegate: 'GPU' },
+          });
+        } catch {
+          poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
+            ...poseOptions,
+            baseOptions: { modelAssetPath: poseModel, delegate: 'CPU' },
+          });
+        }
+        poseLandmarkerRef.current = poseLandmarker;
+      }
       setCameraOn(true);
       setCameraStatus('Vision engine online');
       const loop = (now: number) => {
         const video = videoRef.current;
         const tracker = landmarkerRef.current;
-        if (!video || !tracker || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+        const poseTracker = poseLandmarkerRef.current;
+        if (!video || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
           frameRef.current = requestAnimationFrame(loop);
           return;
         }
-        const result = tracker.detectForVideo(video, now);
-        handInputRef.current = deriveHandInput(result.landmarks[0], now);
-        setHandCount(result.landmarks.length);
+        if (tracker) {
+          const result = tracker.detectForVideo(video, now);
+          handInputRef.current = deriveHandInput(result.landmarks[0], now);
+          setHandCount(result.landmarks.length);
+        } else {
+          handInputRef.current = { ...EMPTY_HAND_INPUT };
+          setHandCount(0);
+        }
+        if (poseTracker) {
+          const poseResult = poseTracker.detectForVideo(video, now);
+          bodyInputRef.current = deriveBodyInput(poseResult.landmarks[0], now);
+        } else {
+          bodyInputRef.current = { ...EMPTY_BODY_INPUT };
+        }
         frameCountRef.current += 1;
         if (now - lastFrameRef.current >= 1000) {
           setFps(frameCountRef.current);
@@ -153,6 +200,9 @@ export default function App() {
       handInputRef.current = { ...EMPTY_HAND_INPUT };
       landmarkerRef.current?.close();
       landmarkerRef.current = null;
+      poseLandmarkerRef.current?.close();
+      poseLandmarkerRef.current = null;
+      bodyInputRef.current = { ...EMPTY_BODY_INPUT };
       setCameraOn(false);
       const message = error instanceof Error ? error.message : 'Camera could not start.';
       if (message.toLowerCase().includes('permission') || message.toLowerCase().includes('denied')) {
@@ -161,11 +211,12 @@ export default function App() {
         setCameraStatus('Could not start vision engine. Check camera access and your connection, then retry.');
       }
     }
-  }, []);
+  }, [active]);
 
   useEffect(() => () => {
     if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
     landmarkerRef.current?.close();
+    poseLandmarkerRef.current?.close();
     streamRef.current?.getTracks().forEach((track) => track.stop());
   }, []);
 
@@ -224,25 +275,27 @@ export default function App() {
                 <span><span className={cameraOn ? 'status-dot active' : 'status-dot'} /> LIVE INPUT</span>
                 <span className="panel-topline-right">{cameraOn ? 'CAMERA CONNECTED' : 'AWAITING INPUT'}</span>
               </div>
-              <div className={'camera-stage ' + (cameraOn ? 'camera-stage-live' : '')}>
+              <div className={'camera-stage ' + (cameraOn ? 'camera-stage-live' : '') + (activeExperience.id === 'holodesk' ? ' is-holodesk' : '') + (activeExperience.id === 'shadowstrike' ? ' is-shadowstrike' : '')}>
                 <video ref={videoRef} className={cameraOn ? 'camera-video visible' : 'camera-video'} autoPlay playsInline muted />
-                {!cameraOn && <div className="camera-placeholder">
+                {!cameraOn && activeExperience.id !== 'shadowstrike' && <div className="camera-placeholder">
                   <div className="camera-orbit"><div className="orbit-ring orbit-ring-one" /><div className="orbit-ring orbit-ring-two" /><div className="camera-symbol"><Camera size={28} /></div></div>
                   <h3>{activeExperience.id === 'holodesk' ? 'Touchless 3D is ready.' : 'Give Nexus a point of view.'}</h3>
                   <p>{activeExperience.id === 'holodesk' ? 'Drag the hologram to move it. Enable the camera to grab it with a pinch.' : 'Enable your camera to initialize the shared vision engine.'}</p>
                   {activeExperience.id !== 'holodesk' && <button className="button button-primary" onClick={() => void startCamera()}><Camera size={16} /> Enable camera</button>}
                   <span className="permission-note"><ShieldCheck size={13} /> Camera starts only when you ask</span>
                 </div>}
-                {cameraOn && <div className="tracking-overlay">
+                {cameraOn && activeExperience.id !== 'shadowstrike' && activeExperience.id !== 'realityscan' && <div className="tracking-overlay">
                   <span className="tracking-label"><span className="status-dot active" /> TRACKING ACTIVE</span>
                   <span className="tracking-counter">{String(handCount).padStart(2, '0')} HAND{handCount === 1 ? '' : 'S'}</span>
                   <div className="scanline" />
                 </div>}
                 {activeExperience.id === 'holodesk' && <HoloDeskScene inputRef={handInputRef} cameraEnabled={cameraOn} />}
+                {activeExperience.id === 'shadowstrike' && <ShadowStrikeGame bodyInputRef={bodyInputRef} cameraEnabled={cameraOn} />}
+                {activeExperience.id === 'realityscan' && <RealityScanOverlay active={cameraOn} videoRef={videoRef} />}
               </div>
               <div className="camera-footer">
                 <span className="camera-status"><span className={cameraOn ? 'status-dot active' : 'status-dot'} /> {cameraStatus}</span>
-                <span className="camera-fps">{cameraOn ? fps + ' FPS · ' + handCount + ' detected' : 'NO SIGNAL'}</span>
+                <span className="camera-fps">{cameraOn ? fps + ' FPS · ' + (activeExperience.id === 'shadowstrike' ? (bodyInputRef.current.detected ? 'body tracked' : 'find full body') : activeExperience.id === 'realityscan' ? 'object detector' : handCount + ' hands') : 'NO SIGNAL'}</span>
               </div>
             </div>
             <aside className="inspector">
