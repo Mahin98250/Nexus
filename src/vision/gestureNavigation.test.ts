@@ -1,0 +1,22 @@
+import { describe, expect, it } from 'vitest';
+import { clampGesturePointer, shouldActivateGestureTarget } from './gestureNavigation';
+
+describe('global gesture navigation helpers', () => {
+  it('activates only on the rising edge of a detected pinch', () => {
+    expect(shouldActivateGestureTarget(true, true, false)).toBe(true);
+    expect(shouldActivateGestureTarget(true, true, true)).toBe(false);
+    expect(shouldActivateGestureTarget(true, false, true)).toBe(false);
+    expect(shouldActivateGestureTarget(false, true, false)).toBe(false);
+  });
+
+  it('clamps finite pointer coordinates to the viewport', () => {
+    expect(clampGesturePointer(-0.2)).toBe(0);
+    expect(clampGesturePointer(0.35)).toBe(0.35);
+    expect(clampGesturePointer(1.4)).toBe(1);
+  });
+
+  it('uses the centre as a safe fallback for invalid coordinates', () => {
+    expect(clampGesturePointer(Number.NaN)).toBe(0.5);
+    expect(clampGesturePointer(Number.POSITIVE_INFINITY)).toBe(0.5);
+  });
+});
