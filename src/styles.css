@@ -19,3 +19,21 @@
 @media(max-width:700px){.topbar{height:64px;padding:0 17px}.topbar-right{gap:7px}.connection-pill{display:none}.home,.workspace{padding-left:17px;padding-right:17px}.hero{min-height:355px;padding:43px 0 38px}.hero h1{font-size:57px;letter-spacing:-3.4px}.hero-copy{max-width:350px;font-size:12px}.hero-decoration{right:-130px;top:30px;opacity:.25}.hero-meta{font-size:8px}.section-heading h2{font-size:22px}.experience-grid{gap:10px}.card-visual{height:135px}.card-content{padding:13px 11px;min-height:111px}.card-content h3{font-size:16px}.card-content p{font-size:10px}.card-category{font-size:7px}.card-top,.card-bottom{padding-left:10px;padding-right:10px}.card-number,.card-bottom{font-size:7px}.bottom-strip{align-items:start;padding:12px}.bottom-strip>div:nth-child(2)>span{line-height:1.6}.strip-right{display:none}.site-footer{font-size:7px}.site-footer>span:nth-child(2){display:none}.workspace-toolbar{height:53px}.workspace-breadcrumb{display:none}.workspace-heading{align-items:start;flex-direction:column;padding:27px 0 19px}.workspace-heading h1{font-size:35px}.workspace-heading p{font-size:11px}.workspace-grid{grid-template-columns:1fr}.camera-stage{height:clamp(300px,75vw,430px);min-height:300px}.inspector{display:grid;grid-template-columns:1fr 1fr;column-gap:15px}.inspector-title{grid-column:1/-1}.inspector-section{padding:14px 0}.inspector-section:nth-of-type(3){border-bottom:0}.inspector-note{grid-column:1/-1;padding:12px 0}.workspace-bottom{align-items:start;flex-direction:column}.build-label{margin-top:2px}.quick-switch button{font-size:9px}.workspace-version{font-size:7px}.button{min-height:40px}.workspace-actions{width:100%}.workspace-actions .button{width:100%}}
 @media(max-width:390px){.brand{font-size:15px;gap:8px}.brand-beta{font-size:7px}.icon-button{width:27px;height:27px}.experience-grid{grid-template-columns:1fr}.card-visual{height:170px}.card-content{min-height:100px}.hero h1{font-size:51px}.hero-decoration{right:-175px}.section-count{font-size:8px}.site-footer button{font-size:7px}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important;transition-duration:.01ms!important}}
+
+/* Interactive HoloDesk overlay */
+.camera-stage.is-holodesk{isolation:isolate}
+.camera-stage.is-holodesk .camera-placeholder{position:relative;z-index:1}
+.camera-stage.is-holodesk:not(.camera-stage-live) .camera-placeholder{position:absolute;left:0;right:0;bottom:0;transform:none;width:100%;padding:24px 16px 25px;background:linear-gradient(transparent,rgba(8,10,18,.92) 18%,rgba(8,10,18,.97));}
+.camera-stage.is-holodesk:not(.camera-stage-live) .camera-orbit{display:none}
+.camera-stage.is-holodesk:not(.camera-stage-live) .camera-placeholder h3{font-size:14px;margin-bottom:4px}
+.camera-stage.is-holodesk:not(.camera-stage-live) .camera-placeholder p{font-size:10px;max-width:360px;margin-bottom:4px}
+.camera-stage.is-holodesk .permission-note{margin-top:8px}
+.holo-scene-layer{position:absolute;inset:0;z-index:3;overflow:hidden;pointer-events:none}
+.holo-canvas{position:absolute;inset:0;display:block;width:100%;height:100%;pointer-events:auto;touch-action:none;cursor:grab;outline:none}
+.holo-canvas:active{cursor:grabbing}
+.holo-scene-hud,.holo-scene-footnote{position:absolute;z-index:4;display:flex;align-items:center;gap:7px;padding:8px 10px;border:1px solid rgba(171,160,255,.23);border-radius:6px;background:rgba(8,10,18,.66);backdrop-filter:blur(10px);font:8px var(--mono);letter-spacing:1px;color:#b8b2e8;pointer-events:none}
+.holo-scene-hud{top:14px;left:14px}
+.holo-scene-footnote{bottom:14px;right:14px;color:#858ca6;border-color:rgba(171,160,255,.13);font-size:7px}
+.holo-scene-footnote span{color:#83e2d2}
+.holo-scene-unavailable:after{content:'3D graphics are not available in this browser.';position:absolute;left:16px;right:16px;top:50%;text-align:center;font-size:11px;line-height:1.7;color:#c1bddf}
+@media(max-width:700px){.camera-stage.is-holodesk:not(.camera-stage-live) .camera-placeholder{padding:20px 10px 18px}.holo-scene-hud{top:9px;left:9px;padding:7px 8px;font-size:7px}.holo-scene-footnote{right:9px;bottom:9px;padding:7px 8px;font-size:6px}}
