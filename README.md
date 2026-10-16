@@ -51,3 +51,13 @@ React · TypeScript · Vite · MediaPipe Tasks Vision · Three.js · Lucide · V
 ## Project status
 
 This is an actively developed prototype. CI currently runs a dependency audit, TypeScript checks, gesture unit tests, and the production build. A green CI run verifies those automated checks; it does not replace physical-device camera and interaction testing.
+
+## Deploying a live demo with GitHub Pages
+
+This app uses Vite, so publishing the source tree directly with the default Jekyll branch publisher is not enough for the interactive app. To publish the built app:
+
+1. Open **Settings → Pages** and set **Build and deployment → Source** to **GitHub Actions**.
+2. Open **Actions → Deploy Nexus to GitHub Pages → Run workflow**.
+3. When the workflow finishes successfully, open the Pages URL shown in the deployment job.
+
+The manual deployment workflow builds with the project path `/Nexus/`, audits dependencies, and publishes only the generated `dist` artifact.
