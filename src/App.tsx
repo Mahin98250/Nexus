@@ -1,0 +1,292 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  ArrowLeft, ArrowRight, Camera, Check, ChevronRight, CircleHelp, Command,
+  Crosshair, Hand, Layers3, Maximize2, Monitor, Move3D, Play, ScanLine,
+  Settings2, ShieldCheck, Sparkles, Target, X,
+} from 'lucide-react';
+import { FilesetResolver, HandLandmarker } from '@mediapipe/tasks-vision';
+
+type ExperienceId = 'holodesk' | 'shadowstrike' | 'airos' | 'realityscan';
+type Experience = {
+  id: ExperienceId;
+  number: string;
+  title: string;
+  category: string;
+  description: string;
+  detail: string;
+  icon: typeof Hand;
+  accent: string;
+  tags: string[];
+};
+
+const experiences: Experience[] = [
+  {
+    id: 'holodesk', number: '01', title: 'HoloDesk', category: 'SPATIAL PLAYGROUND',
+    description: 'Bring objects to life with your hands.',
+    detail: 'Explore a touchless 3D workspace. The shared vision engine is the first building block for natural grab, rotate, and scale interactions.',
+    icon: Move3D, accent: 'violet', tags: ['Hand tracking', '3D space', 'Spatial input'],
+  },
+  {
+    id: 'shadowstrike', number: '02', title: 'ShadowStrike', category: 'MOTION ARCADE',
+    description: 'Your movement. Your controls. Your game.',
+    detail: 'A motion-controlled arcade experience. The next milestone adds body pose tracking, movement calibration, and responsive game physics.',
+    icon: Target, accent: 'orange', tags: ['Body tracking', 'Arcade', 'Motion input'],
+  },
+  {
+    id: 'airos', number: '03', title: 'AirOS', category: 'TOUCHLESS WORKSPACE',
+    description: 'A desktop that listens to gestures.',
+    detail: 'A browser-based desktop concept with gesture-driven interactions. It controls its own interface, not the entire operating system.',
+    icon: Monitor, accent: 'blue', tags: ['Floating windows', 'Gesture UI', 'Mini apps'],
+  },
+  {
+    id: 'realityscan', number: '04', title: 'RealityScan Live', category: 'COMPUTER VISION',
+    description: 'See the world through a smarter lens.',
+    detail: 'A camera workspace for experimenting with real-time vision. Hand tracking is available now; general object detection is a separate next step.',
+    icon: ScanLine, accent: 'mint', tags: ['Live camera', 'Vision tools', 'Local processing'],
+  },
+];
+
+const visionWasm = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/wasm';
+const handModel = 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task';
+
+export default function App() {
+  const [active, setActive] = useState<ExperienceId | null>(null);
+  const [cameraOn, setCameraOn] = useState(false);
+  const [cameraStatus, setCameraStatus] = useState('Camera is off');
+  const [handCount, setHandCount] = useState(0);
+  const [fps, setFps] = useState(0);
+  const [showHelp, setShowHelp] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const landmarkerRef = useRef<HandLandmarker | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const frameRef = useRef<number | null>(null);
+  const lastFrameRef = useRef(0);
+  const frameCountRef = useRef(0);
+  const activeExperience = experiences.find((item) => item.id === active) ?? null;
+
+  const stopCamera = useCallback(() => {
+    if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
+    frameRef.current = null;
+    landmarkerRef.current?.close();
+    landmarkerRef.current = null;
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+    if (videoRef.current) videoRef.current.srcObject = null;
+    setCameraOn(false);
+    setHandCount(0);
+    setFps(0);
+    setCameraStatus('Camera is off');
+  }, []);
+
+  const startCamera = useCallback(async () => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setCameraStatus('Camera needs a supported browser and a secure connection.');
+      return;
+    }
+    setCameraStatus('Requesting camera permission…');
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: false,
+        video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
+      });
+      streamRef.current = stream;
+      if (!videoRef.current) {
+        stream.getTracks().forEach((track) => track.stop());
+        streamRef.current = null;
+        setCameraStatus('Camera view is not ready. Try again.');
+        return;
+      }
+      videoRef.current.srcObject = stream;
+      await videoRef.current.play();
+      setCameraStatus('Loading hand-tracking model…');
+      const vision = await FilesetResolver.forVisionTasks(visionWasm);
+      const landmarker = await HandLandmarker.createFromOptions(vision, {
+        baseOptions: { modelAssetPath: handModel, delegate: 'GPU' },
+        runningMode: 'VIDEO',
+        numHands: 2,
+        minHandDetectionConfidence: 0.55,
+        minHandPresenceConfidence: 0.55,
+        minTrackingConfidence: 0.55,
+      });
+      landmarkerRef.current = landmarker;
+      setCameraOn(true);
+      setCameraStatus('Vision engine online');
+      const loop = (now: number) => {
+        const video = videoRef.current;
+        const tracker = landmarkerRef.current;
+        if (!video || !tracker || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+          frameRef.current = requestAnimationFrame(loop);
+          return;
+        }
+        const result = tracker.detectForVideo(video, now);
+        setHandCount(result.landmarks.length);
+        frameCountRef.current += 1;
+        if (now - lastFrameRef.current >= 1000) {
+          setFps(frameCountRef.current);
+          frameCountRef.current = 0;
+          lastFrameRef.current = now;
+        }
+        frameRef.current = requestAnimationFrame(loop);
+      };
+      frameRef.current = requestAnimationFrame(loop);
+    } catch (error) {
+      streamRef.current?.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+      landmarkerRef.current?.close();
+      landmarkerRef.current = null;
+      setCameraOn(false);
+      const message = error instanceof Error ? error.message : 'Camera could not start.';
+      if (message.toLowerCase().includes('permission') || message.toLowerCase().includes('denied')) {
+        setCameraStatus('Camera permission was denied. Allow camera access in your browser settings.');
+      } else {
+        setCameraStatus('Could not start vision engine. Check camera access and your connection, then retry.');
+      }
+    }
+  }, []);
+
+  useEffect(() => () => {
+    if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
+    landmarkerRef.current?.close();
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+  }, []);
+
+  const openExperience = (id: ExperienceId) => {
+    stopCamera();
+    setActive(id);
+  };
+
+  const goHome = () => {
+    stopCamera();
+    setActive(null);
+  };
+
+  return (
+    <main className="app-shell">
+      <div className="ambient ambient-one" />
+      <div className="ambient ambient-two" />
+      <header className="topbar">
+        <button className="brand" onClick={goHome} aria-label="Nexus home">
+          <span className="brand-mark"><Command size={19} strokeWidth={2.2} /></span>
+          <span>NEXUS<span className="brand-period">.</span></span>
+          <span className="brand-beta">PREVIEW</span>
+        </button>
+        <div className="topbar-right">
+          <span className="connection-pill"><span className="status-dot" /> LOCAL VISION</span>
+          <button className="icon-button" onClick={() => setShowHelp(true)} aria-label="Help"><CircleHelp size={18} /></button>
+          <button className="icon-button" onClick={() => setShowHelp(true)} aria-label="Settings"><Settings2 size={18} /></button>
+          <div className="avatar">M</div>
+        </div>
+      </header>
+
+      {activeExperience ? (
+        <section className="workspace">
+          <div className="workspace-toolbar">
+            <button className="back-button" onClick={goHome}><ArrowLeft size={16} /> All experiences</button>
+            <span className="workspace-breadcrumb">NEXUS / {activeExperience.title.toUpperCase()}</span>
+            <span className="workspace-version">ENGINE 0.1</span>
+          </div>
+          <div className="workspace-heading">
+            <div>
+              <div className="eyebrow"><span className="eyebrow-line" /> EXPERIENCE {activeExperience.number}</div>
+              <h1>{activeExperience.title}<span className="brand-period">.</span></h1>
+              <p>{activeExperience.detail}</p>
+            </div>
+            <div className="workspace-actions">
+              {cameraOn ? (
+                <button className="button button-secondary" onClick={stopCamera}><X size={16} /> Stop camera</button>
+              ) : (
+                <button className="button button-primary" onClick={() => void startCamera()}><Camera size={16} /> Enable camera <ArrowRight size={16} /></button>
+              )}
+            </div>
+          </div>
+          <div className="workspace-grid">
+            <div className="camera-panel">
+              <div className="panel-topline">
+                <span><span className={cameraOn ? 'status-dot active' : 'status-dot'} /> LIVE INPUT</span>
+                <span className="panel-topline-right">{cameraOn ? 'CAMERA CONNECTED' : 'AWAITING INPUT'}</span>
+              </div>
+              <div className={'camera-stage ' + (cameraOn ? 'camera-stage-live' : '')}>
+                <video ref={videoRef} className={cameraOn ? 'camera-video visible' : 'camera-video'} autoPlay playsInline muted />
+                {!cameraOn && <div className="camera-placeholder">
+                  <div className="camera-orbit"><div className="orbit-ring orbit-ring-one" /><div className="orbit-ring orbit-ring-two" /><div className="camera-symbol"><Camera size={28} /></div></div>
+                  <h3>Give Nexus a point of view.</h3>
+                  <p>Enable your camera to initialize the shared vision engine.</p>
+                  <button className="button button-primary" onClick={() => void startCamera()}><Camera size={16} /> Enable camera</button>
+                  <span className="permission-note"><ShieldCheck size={13} /> Camera starts only when you ask</span>
+                </div>}
+                {cameraOn && <div className="tracking-overlay">
+                  <span className="tracking-label"><span className="status-dot active" /> TRACKING ACTIVE</span>
+                  <span className="tracking-counter">{String(handCount).padStart(2, '0')} HAND{handCount === 1 ? '' : 'S'}</span>
+                  <div className="scanline" />
+                </div>}
+              </div>
+              <div className="camera-footer">
+                <span className="camera-status"><span className={cameraOn ? 'status-dot active' : 'status-dot'} /> {cameraStatus}</span>
+                <span className="camera-fps">{cameraOn ? fps + ' FPS · ' + handCount + ' detected' : 'NO SIGNAL'}</span>
+              </div>
+            </div>
+            <aside className="inspector">
+              <div className="inspector-title"><span>SESSION INSPECTOR</span><span className="inspector-icon"><Layers3 size={15} /></span></div>
+              <div className="inspector-section">
+                <span className="field-label">CURRENT EXPERIENCE</span>
+                <div className="selected-experience"><div className={'mini-icon ' + activeExperience.accent}><activeExperience.icon size={19} /></div><div><strong>{activeExperience.title}</strong><span>{activeExperience.category}</span></div><Check size={16} className="check-icon" /></div>
+              </div>
+              <div className="inspector-section">
+                <span className="field-label">VISION ENGINE</span>
+                <div className="metric-row"><span>Camera</span><span className={cameraOn ? 'metric-value online' : 'metric-value'}>{cameraOn ? 'Connected' : 'Standby'}</span></div>
+                <div className="metric-row"><span>Hand landmarks</span><span className="metric-value">{cameraOn ? handCount + ' detected' : 'Waiting'}</span></div>
+                <div className="metric-row"><span>Frame rate</span><span className="metric-value">{cameraOn ? fps + ' FPS' : '—'}</span></div>
+                <div className="metric-row"><span>Processing</span><span className="metric-value">On-device</span></div>
+              </div>
+              <div className="inspector-section">
+                <span className="field-label">EXPERIENCE MODULES</span>
+                <div className="tag-list">{activeExperience.tags.map((tag) => <span className="feature-tag" key={tag}>{tag}</span>)}</div>
+              </div>
+              <div className="inspector-note"><Sparkles size={15} /><p><strong>Built to grow.</strong> The shared camera and tracking layer is being developed once, then reused across all four experiences.</p></div>
+            </aside>
+          </div>
+          <div className="workspace-bottom">
+            <div><span className="bottom-label">QUICK SWITCH</span><div className="quick-switch">{experiences.filter((item) => item.id !== active).map((item) => <button key={item.id} onClick={() => openExperience(item.id)}><item.icon size={15} /> {item.title} <ChevronRight size={13} /></button>)}</div></div>
+            <span className="build-label">NEXUS PREVIEW <span>·</span> BUILD 0.1.0</span>
+          </div>
+        </section>
+      ) : (
+        <section className="home">
+          <div className="hero">
+            <div className="eyebrow"><span className="eyebrow-line" /> A NEW WAY TO INTERACT</div>
+            <h1>The world<br />beyond <span className="gradient-text">touch.</span></h1>
+            <p className="hero-copy">Four experimental experiences. One camera. A whole new way to play, create, and interact with the digital world.</p>
+            <div className="hero-actions">
+              <button className="button button-primary" onClick={() => openExperience('holodesk')}><Play size={16} fill="currentColor" /> Enter the playground <ArrowRight size={16} /></button>
+              <span className="hero-meta"><span className="status-dot active" /> 4 EXPERIENCES <span className="meta-divider">/</span> CAMERA OPTIONAL</span>
+            </div>
+            <div className="hero-decoration" aria-hidden="true"><div className="hero-ring ring-a" /><div className="hero-ring ring-b" /><div className="hero-ring ring-c" /><div className="hero-center"><Hand size={42} strokeWidth={1.1} /></div><div className="hero-cross cross-a" /><div className="hero-cross cross-b" /><div className="hero-cross cross-c" /><div className="hero-coordinate">37° 46' 49.3&quot; N<br />122° 25' 09.1&quot; W</div><div className="hero-chip chip-a">GESTURE INPUT <span>READY</span></div><div className="hero-chip chip-b"><span className="status-dot active" /> REAL-TIME VISION</div></div>
+          </div>
+          <div className="section-heading">
+            <div><div className="eyebrow"><span className="eyebrow-line" /> YOUR PLAYGROUND</div><h2>Choose your reality<span className="brand-period">.</span></h2></div>
+            <span className="section-count">01 — 04 <ArrowRight size={14} /></span>
+          </div>
+          <div className="experience-grid">
+            {experiences.map((experience) => (
+              <button className={'experience-card ' + experience.accent} key={experience.id} onClick={() => openExperience(experience.id)}>
+                <div className="card-top"><span className="card-number">{experience.number} / NEXUS</span><span className="card-arrow"><ArrowRight size={17} /></span></div>
+                <div className="card-visual">
+                  {experience.id === 'holodesk' && <div className="visual-holo"><div className="holo-orbit holo-one" /><div className="holo-orbit holo-two" /><div className="holo-cube"><div className="cube-face cube-front" /><div className="cube-face cube-back" /><div className="cube-face cube-left" /><div className="cube-face cube-right" /><div className="cube-face cube-top" /><div className="cube-face cube-bottom" /></div><div className="holo-dot dot-one" /><div className="holo-dot dot-two" /><div className="holo-dot dot-three" /></div>}
+                  {experience.id === 'shadowstrike' && <div className="visual-game"><div className="game-grid" /><div className="game-target target-one" /><div className="game-target target-two" /><div className="game-target target-three" /><div className="game-player"><div className="player-head" /><div className="player-body" /><div className="player-arm arm-left" /><div className="player-arm arm-right" /><div className="player-leg leg-left" /><div className="player-leg leg-right" /></div><div className="game-score">SCORE <b>00840</b></div></div>}
+                  {experience.id === 'airos' && <div className="visual-os"><div className="os-window os-window-back"><span /><span /><span /></div><div className="os-window os-window-front"><div className="os-title"><i /><i /><i /></div><div className="os-lines"><span /><span /><span /><span /></div><div className="os-widget"><Monitor size={17} /><span>Gesture<br />workspace</span></div></div><div className="os-cursor"><Move3D size={18} /></div></div>}
+                  {experience.id === 'realityscan' && <div className="visual-scan"><div className="scan-object"><div className="scan-box"><span className="scan-corner corner-1" /><span className="scan-corner corner-2" /><span className="scan-corner corner-3" /><span className="scan-corner corner-4" /><span className="scan-label">OBJECT TRACKED</span></div><div className="scan-cube"><div /><div /><div /><div /><div /><div /></div></div><div className="scan-hud">LIVE / 30 FPS</div><div className="scan-line" /></div>}
+                </div>
+                <div className="card-content"><span className="card-category">{experience.category}</span><h3>{experience.title}<span className="brand-period">.</span></h3><p>{experience.description}</p></div>
+                <div className="card-bottom"><span><span className="status-dot active" /> OPEN EXPERIENCE</span><ChevronRight size={16} /></div>
+              </button>
+            ))}
+          </div>
+          <div className="bottom-strip"><div className="strip-icon"><ShieldCheck size={17} /></div><div><strong>Privacy by design</strong><span>Your camera stays off until you enable it. Vision processing runs locally in your browser.</span></div><div className="strip-right"><span className="status-dot active" /> NO ACCOUNT REQUIRED</div></div>
+          <footer className="site-footer"><span>© 2026 NEXUS LABS</span><span>MADE FOR THE CURIOUS <Sparkles size={12} /></span><button onClick={() => setShowHelp(true)}>ABOUT THE PROJECT <ArrowRight size={12} /></button></footer>
+        </section>
+      )}
+
+      {showHelp && <div className="modal-backdrop" role="presentation" onClick={() => setShowHelp(false)}><section className="help-modal" role="dialog" aria-modal="true" aria-labelledby="help-title" onClick={(event) => event.stopPropagation()}><button className="modal-close" onClick={() => setShowHelp(false)} aria-label="Close help"><X size={18} /></button><div className="modal-icon"><CircleHelp size={22} /></div><div className="eyebrow">QUICK GUIDE</div><h2 id="help-title">Welcome to Nexus.</h2><p>Nexus is an experimental playground for camera-based interaction. Choose an experience to enter its workspace, then enable the camera to test the shared hand-tracking engine.</p><div className="help-list"><div><Camera size={16} /><span><strong>Camera access</strong><small>Requested only when you press Enable camera. Use HTTPS or localhost.</small></span></div><div><ShieldCheck size={16} /><span><strong>Privacy</strong><small>Video is processed in your browser and is not uploaded by this app.</small></span></div><div><Maximize2 size={16} /><span><strong>Good tracking</strong><small>Use bright, even light and keep your hand fully visible.</small></span></div></div><button className="button button-primary modal-done" onClick={() => setShowHelp(false)}>Got it <Check size={16} /></button></section></div>}
+    </main>
+  );
+}
