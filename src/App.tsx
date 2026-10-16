@@ -699,6 +699,14 @@ export default function App() {
     setActive(null);
   };
 
+  const handleAirOSNavigation = (id: ExperienceId | 'home') => {
+    if (id === 'home') {
+      goHome();
+      return;
+    }
+    openExperience(id);
+  };
+
   return (
     <main className={'app-shell theme-' + theme}>
       <div className="ambient ambient-one" />
@@ -761,7 +769,7 @@ export default function App() {
                 </div>}
                 {activeExperience.id === 'holodesk' && <HoloDeskScene inputRef={handInputRef} cameraEnabled={cameraOn} />}
                 {activeExperience.id === 'shadowstrike' && <ShadowStrikeGame bodyInputRef={bodyInputRef} cameraEnabled={cameraOn} />}
-                {activeExperience.id === 'airos' && <AirOSDesktop inputRef={handInputRef} cameraEnabled={cameraOn} onSwitchExperience={openExperience} />}
+                {activeExperience.id === 'airos' && <AirOSDesktop inputRef={handInputRef} cameraEnabled={cameraOn} onSwitchExperience={handleAirOSNavigation} />}
                 {activeExperience.id === 'realityscan' && <RealityScanOverlay active={cameraOn} videoRef={videoRef} onStatusChange={setCameraStatus} />}
               </div>
               <div className="camera-footer">
