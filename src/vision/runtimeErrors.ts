@@ -9,6 +9,18 @@ export type RuntimeErrorDetails = {
  * instead of replacing the useful cause with a generic message.
  */
 export function getRuntimeErrorDetails(error: unknown): RuntimeErrorDetails {
+  // Resource loading can reject with an Event (for example, script.onerror)
+  // rather than an Error. JSON.stringify(Event) often yields only {"isTrusted":true},
+  // which hides the URL and the actual failed stage.
+  if (typeof Event !== 'undefined' && error instanceof Event) {
+    const target = error.target as (EventTarget & { src?: string; href?: string; currentSrc?: string; tagName?: string }) | null;
+    const resource = target?.currentSrc || target?.src || target?.href || '';
+    const tag = target?.tagName ? ` ${target.tagName.toLowerCase()}` : '';
+    return {
+      name: error.type ? `ResourceEvent(${error.type})` : 'ResourceEvent',
+      message: `A browser resource${tag} failed to load${resource ? ` (${resource})` : ''}.`,
+    };
+  }
   if (typeof error === 'string') {
     return { name: '', message: error.trim() || 'The operation failed without an error message.' };
   }

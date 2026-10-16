@@ -54,9 +54,19 @@ const experiences: Experience[] = [
   },
 ];
 
-const visionWasm = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/wasm';
-const handModel = 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task';
-const poseModel = 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task';
+const visionWasmCandidates = [
+  'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/wasm',
+  'https://unpkg.com/@mediapipe/tasks-vision@0.10.22/wasm',
+];
+// Some mobile networks can load the camera but block or interrupt Google Cloud Storage.
+// Keep a second model mirror so camera permission success is not mistaken for model success.
+const handModelCandidates = [
+  'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task',
+  'https://github.com/sanderdesnaijer/mediapipe-model-mirrors/releases/download/v1/hand_landmarker.task',
+];
+const poseModelCandidates = [
+  'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task',
+];
 
 export default function App() {
   const [active, setActive] = useState<ExperienceId | null>(null);
@@ -220,11 +230,19 @@ export default function App() {
       }
 
       setCameraStatus(active === 'shadowstrike' ? 'Loading pose-tracking model…' : 'Loading hand-tracking model…');
-      let vision: Awaited<ReturnType<typeof FilesetResolver.forVisionTasks>>;
-      try {
-        vision = await FilesetResolver.forVisionTasks(visionWasm);
-      } catch {
-        vision = await FilesetResolver.forVisionTasks('https://unpkg.com/@mediapipe/tasks-vision@0.10.22/wasm');
+      let vision: Awaited<ReturnType<typeof FilesetResolver.forVisionTasks>> | null = null;
+      let wasmError: unknown = null;
+      for (const wasmRoot of visionWasmCandidates) {
+        try {
+          vision = await FilesetResolver.forVisionTasks(wasmRoot);
+          break;
+        } catch (error) {
+          wasmError = error;
+        }
+      }
+      if (!vision) {
+        const details = getRuntimeErrorDetails(wasmError);
+        throw new Error(`MediaPipe runtime files failed to load from both CDNs (${details.name ? details.name + ': ' : ''}${details.message}). Check the connection or content blocker and retry.`);
       }
       if (sessionId !== cameraSessionRef.current) {
         stream.getTracks().forEach((track) => track.stop());
@@ -240,17 +258,27 @@ export default function App() {
         minTrackingConfidence: 0.55,
       };
       if (trackHands) {
-        let landmarker: HandLandmarker;
-        try {
-          landmarker = await HandLandmarker.createFromOptions(vision, {
-            ...trackingOptions,
-            baseOptions: { modelAssetPath: handModel, delegate: 'GPU' },
-          });
-        } catch {
-          landmarker = await HandLandmarker.createFromOptions(vision, {
-            ...trackingOptions,
-            baseOptions: { modelAssetPath: handModel, delegate: 'CPU' },
-          });
+        let landmarker: HandLandmarker | null = null;
+        let handModelError: unknown = null;
+        // Try each model source with GPU and CPU. Changing delegate alone cannot
+        // recover when the model download itself is blocked or returns an error event.
+        for (const modelAssetPath of handModelCandidates) {
+          for (const delegate of ['GPU', 'CPU'] as const) {
+            try {
+              landmarker = await HandLandmarker.createFromOptions(vision, {
+                ...trackingOptions,
+                baseOptions: { modelAssetPath, delegate },
+              });
+              break;
+            } catch (error) {
+              handModelError = error;
+            }
+          }
+          if (landmarker) break;
+        }
+        if (!landmarker) {
+          const details = getRuntimeErrorDetails(handModelError);
+          throw new Error(`Hand model failed from all configured sources (${details.name ? details.name + ': ' : ''}${details.message}). Check whether the network blocks model downloads, then retry.`);
         }
         if (sessionId !== cameraSessionRef.current) {
           landmarker.close();
@@ -268,17 +296,25 @@ export default function App() {
           minTrackingConfidence: 0.55,
           outputSegmentationMasks: false,
         };
-        let poseLandmarker: PoseLandmarker;
-        try {
-          poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
-            ...poseOptions,
-            baseOptions: { modelAssetPath: poseModel, delegate: 'GPU' },
-          });
-        } catch {
-          poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
-            ...poseOptions,
-            baseOptions: { modelAssetPath: poseModel, delegate: 'CPU' },
-          });
+        let poseLandmarker: PoseLandmarker | null = null;
+        let poseModelError: unknown = null;
+        for (const modelAssetPath of poseModelCandidates) {
+          for (const delegate of ['GPU', 'CPU'] as const) {
+            try {
+              poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
+                ...poseOptions,
+                baseOptions: { modelAssetPath, delegate },
+              });
+              break;
+            } catch (error) {
+              poseModelError = error;
+            }
+          }
+          if (poseLandmarker) break;
+        }
+        if (!poseLandmarker) {
+          const details = getRuntimeErrorDetails(poseModelError);
+          throw new Error(`Pose model failed to load (${details.name ? details.name + ': ' : ''}${details.message}). Check the network and retry.`);
         }
         if (sessionId !== cameraSessionRef.current) {
           poseLandmarker.close();
