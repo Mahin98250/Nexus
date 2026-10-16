@@ -27,3 +27,24 @@ export const EMPTY_HAND_INPUT: HandInput = {
   angle: 0,
   timestamp: 0,
 };
+
+export type BodyInput = {
+  detected: boolean;
+  /** Mirrored normalized body center, from 0 (left) to 1 (right). */
+  x: number;
+  /** True when either wrist is raised above its shoulder. */
+  attack: boolean;
+  /** Approximate jump signal inferred from ankle-to-hip distance. */
+  jump: boolean;
+  timestamp: number;
+};
+
+export type BodyInputRef = { current: BodyInput };
+
+export const EMPTY_BODY_INPUT: BodyInput = {
+  detected: false,
+  x: 0.5,
+  attack: false,
+  jump: false,
+  timestamp: 0,
+};
