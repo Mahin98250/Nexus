@@ -143,3 +143,24 @@
 .air-launcher-foot span{margin-left:auto;color:#8f97b3}
 .air-os-layer.light .air-launcher-search{background:rgba(255,255,255,.7);color:#3d4868;border-color:rgba(67,77,127,.18)}
 @media(max-width:700px){.air-launcher-search{padding:11px}.air-launcher-search input{font-size:16px}.air-launcher-foot{font-size:8px}}
+
+.air-os-help{position:absolute;top:54px;left:18px;z-index:8;display:flex;align-items:center;gap:7px;padding:9px 11px;border:1px solid rgba(179,170,255,.18);border-radius:10px;background:rgba(19,23,46,.62);backdrop-filter:blur(18px);color:#c9c7ff;font-size:10px;cursor:pointer}
+.air-os-help:hover{background:rgba(105,91,210,.2);border-color:rgba(179,170,255,.4)}
+.air-gesture-guide{position:absolute;z-index:25;left:50%;top:50%;transform:translate(-50%,-50%);width:min(540px,calc(100% - 28px));max-height:calc(100% - 100px);overflow:auto;padding:22px;border:1px solid rgba(172,163,255,.25);border-radius:19px;background:rgba(12,16,34,.96);box-shadow:0 30px 100px rgba(0,0,0,.58);backdrop-filter:blur(28px);color:#eff1ff}
+.air-gesture-guide>header{display:flex;justify-content:space-between;gap:15px;align-items:flex-start}
+.air-gesture-guide>header span{font:9px var(--mono);letter-spacing:1.6px;color:#a69aff}
+.air-gesture-guide h3{margin:7px 0 0;font-size:22px;letter-spacing:-.7px}
+.air-gesture-guide>header button{display:grid;place-items:center;width:32px;height:32px;border:1px solid rgba(180,190,255,.15);border-radius:9px;background:rgba(255,255,255,.04);color:inherit}
+.air-gesture-guide>p{font-size:11px;line-height:1.8;color:#a9b1cc;margin:14px 0 17px}
+.air-gesture-list{display:grid;gap:9px}
+.air-gesture-list article{display:flex;align-items:flex-start;gap:12px;padding:12px;border:1px solid rgba(180,190,255,.1);border-radius:11px;background:rgba(255,255,255,.025)}
+.gesture-symbol{flex:0 0 37px;width:37px;height:37px;display:grid;place-items:center;border-radius:10px;background:rgba(138,121,255,.12);font-size:21px}
+.air-gesture-list article div{display:grid;gap:5px;padding-top:2px}
+.air-gesture-list strong{font-size:11px}
+.air-gesture-list small{font-size:10px;line-height:1.65;color:#a2abc7}
+.air-gesture-guide>footer{display:flex;align-items:center;gap:7px;margin-top:16px;padding-top:13px;border-top:1px solid rgba(180,190,255,.1);font:9px var(--mono);color:#91dcb8}
+.air-os-layer.light .air-os-help{background:rgba(247,248,255,.86);color:#5144a1;border-color:rgba(77,70,145,.18)}
+.air-os-layer.light .air-gesture-guide{background:rgba(246,248,255,.97);color:#1b2440}
+.air-os-layer.light .air-gesture-guide>p,.air-os-layer.light .air-gesture-list small{color:#596581}
+.air-os-layer.light .air-gesture-list article{background:rgba(95,105,160,.035);border-color:rgba(77,86,140,.12)}
+@media(max-width:700px){.air-os-help{top:45px;left:8px;padding:8px;font-size:9px}.air-gesture-guide{padding:16px;border-radius:15px}.air-gesture-guide h3{font-size:19px}.air-gesture-list article{padding:10px;gap:9px}.air-gesture-list small{font-size:11px}}
