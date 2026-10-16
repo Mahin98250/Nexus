@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Pause, RotateCcw, Swords, Zap } from 'lucide-react';
+import { ArrowLeft, ArrowRight, ArrowUp, Pause, RotateCcw, Swords, Zap } from 'lucide-react';
 import type { BodyInputRef } from '../vision/types';
 
 type Phase = 'playing' | 'paused' | 'over';
