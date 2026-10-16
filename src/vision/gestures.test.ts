@@ -30,11 +30,12 @@ describe('deriveHandInput', () => {
     expect(deriveHandInput([{ x: 0.2, y: 0.4 }], 7).detected).toBe(false);
   });
 
-  it('mirrors horizontal coordinates to match the selfie preview', () => {
-    const input = deriveHandInput(createLandmarks(), 100);
+  it('maps the cursor to the index fingertip and mirrors it like AirHand', () => {
+    const landmarks = createLandmarks({ 8: { x: 0.72, y: 0.31 } });
+    const input = deriveHandInput(landmarks, 100);
     expect(input.detected).toBe(true);
-    expect(input.x).toBeGreaterThan(0);
-    expect(input.x).toBeLessThan(1);
+    expect(input.x).toBeCloseTo(0.28);
+    expect(input.y).toBeCloseTo(0.31);
     expect(input.timestamp).toBe(100);
   });
 
