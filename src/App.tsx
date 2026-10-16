@@ -362,7 +362,30 @@ export default function App() {
       poseLandmarkerRef.current = null;
       bodyInputRef.current = { ...EMPTY_BODY_INPUT };
       cameraStartingRef.current = false;
-robust diagnostic and preserve video on tracking error
+      setCameraStarting(false);
+      setCameraOn(streamAttached);
+
+      const { name: errorName, message } = getRuntimeErrorDetails(error);
+      const normalized = `${errorName} ${message}`.toLowerCase();
+      if (streamAttached) {
+        // The video stream is valid; keep it alive if only model initialization failed.
+        const trackingMode = active === 'shadowstrike' ? 'body tracking' : 'hand tracking';
+        const detail = `${errorName ? errorName + ': ' : ''}${message}`.replace(/\s+/g, ' ').slice(0, 135);
+        setCameraStatus(`Camera connected, but ${trackingMode} failed — ${detail}. Stop and retry to reload tracking.`);
+      } else if (normalized.includes('notallowed') || normalized.includes('permission') || normalized.includes('denied') || normalized.includes('securityerror')) {
+        setCameraStatus('Camera access blocked by the browser. Check Chrome Site settings → Camera, then reload Nexus.');
+      } else if (normalized.includes('notfound') || normalized.includes('devicesnotfound')) {
+        setCameraStatus('No camera was found. Close other camera apps and retry.');
+      } else if (normalized.includes('notreadable') || normalized.includes('trackstart')) {
+        setCameraStatus('Camera is busy or unavailable. Close other camera apps, then retry.');
+      } else if (normalized.includes('overconstrained')) {
+        setCameraStatus('The camera rejected its settings. The fallback settings also failed.');
+      } else if (normalized.includes('insecure') || normalized.includes('secure context')) {
+        setCameraStatus('Camera requires HTTPS. Open the official Nexus HTTPS address.');
+      } else {
+        const detail = `${errorName ? errorName + ': ' : ''}${message}`.replace(/\s+/g, ' ').slice(0, 135);
+        setCameraStatus('Camera startup failed — ' + detail);
+      }
     }
   }, [active]);
 
