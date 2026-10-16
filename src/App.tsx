@@ -209,7 +209,7 @@ export default function App() {
         lastVisionFrameRef.current = now;
         if (tracker) {
           const result = tracker.detectForVideo(video, now);
-          handInputRef.current = deriveHandInput(result.landmarks[0], now);
+          handInputRef.current = deriveHandInput(result.landmarks[0], now, handInputRef.current.pinch);
           setHandCount(result.landmarks.length);
         } else {
           handInputRef.current = { ...EMPTY_HAND_INPUT };
