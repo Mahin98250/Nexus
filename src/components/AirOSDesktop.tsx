@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import {
   BatteryFull, ChevronDown, Palette, Command, FileText, Globe2, Minus,
-  Music2, Search, ShieldCheck, TerminalSquare, Wifi, X,
+  Music2, Search, ShieldCheck, TerminalSquare, Wifi, X, Maximize2, Minimize2, RotateCcw,
 } from 'lucide-react';
 import type { HandInputRef } from '../vision/types';
 import { AirHandCursorSmoother } from '../vision/airHandEngine';
@@ -50,6 +50,8 @@ export default function AirOSDesktop({ inputRef, cameraEnabled }: Props) {
   const [playing, setPlaying] = useState(false);
   const [clock, setClock] = useState(() => new Date());
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+  const [maximizedWindow, setMaximizedWindow] = useState<WindowId | null>(null);
+  const [showLauncher, setShowLauncher] = useState(false);
   cameraRef.current = cameraEnabled;
   windowsRef.current = windows;
 
@@ -69,6 +71,7 @@ export default function AirOSDesktop({ inputRef, cameraEnabled }: Props) {
     setWindows((current) => current.map((item) => item.id === id
       ? { ...item, z: topZRef.current, minimized: false, closed: false }
       : item));
+    setShowLauncher(false);
   };
 
   const startPointerDrag = (event: ReactPointerEvent<HTMLElement>, id: WindowId) => {
@@ -260,8 +263,8 @@ export default function AirOSDesktop({ inputRef, cameraEnabled }: Props) {
       {activeWindows.map((item) => {
         const WindowIcon = icons[item.id];
         return (
-          <section key={item.id} data-air-window={item.id} className={'air-window air-window-' + item.id} style={{ left: item.x + '%', top: item.y + '%', zIndex: item.z }} onPointerDown={() => focusWindow(item.id)}>
-            <header className="air-window-title" data-air-window-title={item.id} onPointerDown={(event) => startPointerDrag(event, item.id)}>
+          <section key={item.id} data-air-window={item.id} className={'air-window air-window-' + item.id + (maximizedWindow === item.id ? ' air-window-maximized' : '')} style={maximizedWindow === item.id ? { zIndex: item.z } : { left: item.x + '%', top: item.y + '%', zIndex: item.z }} onPointerDown={() => focusWindow(item.id)}>
+            <header className="air-window-title" data-air-window-title={item.id} onPointerDown={(event) => { if (maximizedWindow !== item.id) startPointerDrag(event, item.id); }}>
               <div className="air-window-lights">
                 <button aria-label={'Close ' + titles[item.id]} onClick={() => setWindows((current) => current.map((entry) => entry.id === item.id ? { ...entry, closed: true } : entry))}><X size={9} /></button>
                 <button aria-label={'Minimize ' + titles[item.id]} onClick={() => setWindows((current) => current.map((entry) => entry.id === item.id ? { ...entry, minimized: true } : entry))}><Minus size={9} /></button>
@@ -270,6 +273,7 @@ export default function AirOSDesktop({ inputRef, cameraEnabled }: Props) {
               <WindowIcon size={12} />
               <span>{titles[item.id]}</span>
               <span className="air-window-spacer" />
+              <button className="air-window-action" aria-label={maximizedWindow === item.id ? 'Restore window' : 'Maximize window'} onClick={() => setMaximizedWindow(maximizedWindow === item.id ? null : item.id)}>{maximizedWindow === item.id ? <Minimize2 size={12} /> : <Maximize2 size={12} />}</button>
             </header>
             {item.id === 'browser' && <div className="air-app-body browser-body">
               <div className="browser-address"><ShieldCheck size={12} /><input value={address} onChange={(event) => setAddress(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') setAddress(event.currentTarget.value.trim() || 'nexus://welcome'); }} aria-label="Demo browser address" /><button onClick={() => setAddress('nexus://welcome')} aria-label="Go to welcome page"><Search size={12} /></button></div>
@@ -290,9 +294,12 @@ export default function AirOSDesktop({ inputRef, cameraEnabled }: Props) {
           return <button key={id} className={isOpen ? 'dock-app dock-app-open' : 'dock-app'} onClick={() => openWindow(id)} aria-label={'Open ' + titles[id]} title={titles[id]}><Icon size={18} /><i /></button>;
         })}
         <span className="dock-divider" />
+        <button className="dock-app" onClick={() => setShowLauncher((value) => !value)} aria-label="Open app launcher" title="App launcher"><Command size={18} /><i /></button>
         <button className="dock-app dock-settings" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} aria-label="Toggle desktop theme" title="Toggle theme"><Palette size={18} /><i /></button>
+        <button className="dock-app" onClick={() => { setMaximizedWindow(null); setWindows(initialWindows); }} aria-label="Reset workspace layout" title="Reset layout"><RotateCcw size={17} /><i /></button>
       </div>
 
+      {showLauncher && <div className="air-launcher" role="dialog" aria-label="AirOS app launcher"><div className="air-launcher-heading"><div><span>WORKSPACE</span><h3>What are we opening?</h3></div><button onClick={() => setShowLauncher(false)} aria-label="Close launcher"><X size={16} /></button></div><div className="air-launcher-grid">{(Object.keys(titles) as WindowId[]).map((id) => { const Icon = icons[id]; return <button key={id} onClick={() => openWindow(id)}><span><Icon size={21} /></span><strong>{titles[id]}</strong><small>{id === 'browser' ? 'Explore your workspace' : id === 'notes' ? 'Capture an idea' : id === 'terminal' ? 'Run safe demo commands' : 'Ambient focus audio'}</small></button>; })}</div><div className="air-launcher-foot"><ShieldCheck size={13} /> Runs locally in this browser</div></div>}
       <div ref={cursorRef} className="air-hand-cursor"><span /><i /></div>
       <div className="air-os-corner">{cameraEnabled ? 'PINCH A WINDOW TITLE TO MOVE' : 'DRAG WINDOW TITLES · CAMERA OPTIONAL'} <span>·</span> PRIVATE SESSION</div>
     </div>
