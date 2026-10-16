@@ -252,12 +252,20 @@ export default function App() {
         setCameraStatus('Camera connected · starting object detector…');
         let monitorLastFrame = 0;
         let monitorFrames = 0;
+        let lastMonitorVideoTime = -1;
         const monitor = (now: number) => {
           if (sessionId !== cameraSessionRef.current) return;
           frameRef.current = requestAnimationFrame(monitor);
-          monitorFrames += 1;
+          // Count decoded camera frames, not requestAnimationFrame callbacks (which
+          // can be 60+ FPS even when the camera itself only supplies 30 FPS).
+          const monitorVideo = videoRef.current;
+          if (monitorVideo && monitorVideo.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA &&
+              monitorVideo.currentTime !== lastMonitorVideoTime) {
+            lastMonitorVideoTime = monitorVideo.currentTime;
+            monitorFrames += 1;
+          }
           if (now - monitorLastFrame >= 1000) {
-            setFps(monitorFrames);
+            setFps(Math.round(monitorFrames * 1000 / Math.max(1, now - monitorLastFrame)));
             monitorFrames = 0;
             monitorLastFrame = now;
           }
@@ -659,11 +667,11 @@ export default function App() {
                 {activeExperience.id === 'holodesk' && <HoloDeskScene inputRef={handInputRef} cameraEnabled={cameraOn} />}
                 {activeExperience.id === 'shadowstrike' && <ShadowStrikeGame bodyInputRef={bodyInputRef} cameraEnabled={cameraOn} />}
                 {activeExperience.id === 'airos' && <AirOSDesktop inputRef={handInputRef} cameraEnabled={cameraOn} />}
-                {activeExperience.id === 'realityscan' && <RealityScanOverlay active={cameraOn} videoRef={videoRef} />}
+                {activeExperience.id === 'realityscan' && <RealityScanOverlay active={cameraOn} videoRef={videoRef} onStatusChange={setCameraStatus} />}
               </div>
               <div className="camera-footer">
                 <span className="camera-status"><span className={cameraOn || cameraStarting ? 'status-dot active' : 'status-dot'} /> {cameraStatus}</span>
-                <span className="camera-fps">{cameraOn || cameraStarting ? fps + ' FPS · ' + (activeExperience.id === 'shadowstrike' ? (bodyInputRef.current.detected ? 'body tracked' : 'find full body') : activeExperience.id === 'realityscan' ? 'object detector' : handCount + ' hands') : 'NO SIGNAL'}</span>
+                <span className="camera-fps">{cameraOn || cameraStarting ? fps + ' FPS · ' + (activeExperience.id === 'shadowstrike' ? (bodyInputRef.current.detected ? 'body tracked' : 'find full body') : activeExperience.id === 'realityscan' ? 'camera frames' : handCount + ' hands') : 'NO SIGNAL'}</span>
               </div>
             </div>
             <aside className="inspector">
