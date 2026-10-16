@@ -30,7 +30,7 @@
 .camera-stage.is-holodesk:not(.camera-stage-live) .camera-placeholder p{font-size:10px;max-width:360px;margin-bottom:4px}
 .camera-stage.is-holodesk .permission-note{margin-top:8px}
 .holo-scene-layer{position:absolute;inset:0;z-index:3;overflow:hidden;pointer-events:none}
-.holo-canvas{position:absolute;inset:0;display:block;width:100%;height:100%;pointer-events:auto;touch-action:none;cursor:grab;outline:none}
+.holo-canvas{position:absolute;inset:0;display:block;width:100%;height:100%;pointer-events:auto;touch-action:none;cursor:grab;outline:none}image-rendering:auto;
 .holo-canvas:active{cursor:grabbing}
 .holo-scene-hud,.holo-scene-footnote{position:absolute;z-index:4;display:flex;align-items:center;gap:7px;padding:8px 10px;border:1px solid rgba(171,160,255,.23);border-radius:6px;background:rgba(8,10,18,.66);backdrop-filter:blur(10px);font:8px var(--mono);letter-spacing:1px;color:#b8b2e8;pointer-events:none}
 .holo-scene-hud{top:14px;left:14px}
