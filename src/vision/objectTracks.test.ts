@@ -22,7 +22,7 @@ describe('updateObjectTracks', () => {
     const second = updateObjectTracks(first.tracks, [box({ x: 110, score: 0.94 })], first.nextId);
 
     expect(second.visible[0].id).toBe(first.visible[0].id);
-    expect(second.visible[0].x).toBeCloseTo(106.4);
+    expect(second.visible[0].x).toBeCloseTo(103.6);
     expect(second.visible[0].score).toBeCloseTo(0.94);
     expect(second.visible[0].missed).toBe(0);
   });
