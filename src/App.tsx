@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { FilesetResolver, HandLandmarker, PoseLandmarker } from '@mediapipe/tasks-vision';
 import ShadowStrikeGame from './components/ShadowStrikeGame';
+import AirOSDesktop from './components/AirOSDesktop';
 import RealityScanOverlay from './components/RealityScanOverlay';
 import HoloDeskScene from './components/HoloDeskScene';
 import { deriveHandInput } from './vision/gestures';
@@ -275,9 +276,9 @@ export default function App() {
                 <span><span className={cameraOn ? 'status-dot active' : 'status-dot'} /> LIVE INPUT</span>
                 <span className="panel-topline-right">{cameraOn ? 'CAMERA CONNECTED' : 'AWAITING INPUT'}</span>
               </div>
-              <div className={'camera-stage ' + (cameraOn ? 'camera-stage-live' : '') + (activeExperience.id === 'holodesk' ? ' is-holodesk' : '') + (activeExperience.id === 'shadowstrike' ? ' is-shadowstrike' : '')}>
+              <div className={'camera-stage ' + (cameraOn ? 'camera-stage-live' : '') + (activeExperience.id === 'holodesk' ? ' is-holodesk' : '') + (activeExperience.id === 'shadowstrike' ? ' is-shadowstrike' : '') + (activeExperience.id === 'airos' ? ' is-airos' : '')}>
                 <video ref={videoRef} className={cameraOn ? 'camera-video visible' : 'camera-video'} autoPlay playsInline muted />
-                {!cameraOn && activeExperience.id !== 'shadowstrike' && <div className="camera-placeholder">
+                {!cameraOn && activeExperience.id !== 'shadowstrike' && activeExperience.id !== 'airos' && <div className="camera-placeholder">
                   <div className="camera-orbit"><div className="orbit-ring orbit-ring-one" /><div className="orbit-ring orbit-ring-two" /><div className="camera-symbol"><Camera size={28} /></div></div>
                   <h3>{activeExperience.id === 'holodesk' ? 'Touchless 3D is ready.' : 'Give Nexus a point of view.'}</h3>
                   <p>{activeExperience.id === 'holodesk' ? 'Drag the hologram to move it. Enable the camera to grab it with a pinch.' : 'Enable your camera to initialize the shared vision engine.'}</p>
@@ -291,6 +292,7 @@ export default function App() {
                 </div>}
                 {activeExperience.id === 'holodesk' && <HoloDeskScene inputRef={handInputRef} cameraEnabled={cameraOn} />}
                 {activeExperience.id === 'shadowstrike' && <ShadowStrikeGame bodyInputRef={bodyInputRef} cameraEnabled={cameraOn} />}
+                {activeExperience.id === 'airos' && <AirOSDesktop inputRef={handInputRef} cameraEnabled={cameraOn} />}
                 {activeExperience.id === 'realityscan' && <RealityScanOverlay active={cameraOn} videoRef={videoRef} />}
               </div>
               <div className="camera-footer">
