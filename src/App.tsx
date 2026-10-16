@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ArrowLeft, ArrowRight, Camera, Check, ChevronRight, CircleHelp, Command,
   Hand, Layers3, Maximize2, Monitor, Move3D, Play, ScanLine,
-  Settings2, ShieldCheck, Sparkles, Target, X,
+  Settings2, ShieldCheck, Sparkles, Target, X, Sun, Moon,
 } from 'lucide-react';
 import type { GestureRecognizer, HandLandmarker, PoseLandmarker } from '@mediapipe/tasks-vision';
 import ShadowStrikeGame from './components/ShadowStrikeGame';
@@ -102,6 +102,10 @@ export default function App() {
   const [handCount, setHandCount] = useState(0);
   const [fps, setFps] = useState(0);
   const [showHelp, setShowHelp] = useState(false);
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
+    try { return localStorage.getItem('nexus-theme') === 'light' ? 'light' : 'dark'; }
+    catch { return 'dark'; }
+  });
   const handInputRef = useRef<HandInput>({ ...EMPTY_HAND_INPUT });
   const bodyInputRef = useRef<BodyInput>({ ...EMPTY_BODY_INPUT });
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -120,6 +124,10 @@ export default function App() {
   const lastVisionFrameRef = useRef(0);
   const frameCountRef = useRef(0);
   const activeExperience = experiences.find((item) => item.id === active) ?? null;
+
+  useEffect(() => {
+    try { localStorage.setItem('nexus-theme', theme); } catch { /* storage may be unavailable */ }
+  }, [theme]);
 
   const stopCamera = useCallback(() => {
     cameraSessionRef.current += 1;
@@ -609,7 +617,7 @@ export default function App() {
   };
 
   return (
-    <main className="app-shell">
+    <main className={'app-shell theme-' + theme}>
       <div className="ambient ambient-one" />
       <div className="ambient ambient-two" />
       <header className="topbar">
@@ -621,6 +629,7 @@ export default function App() {
         <div className="topbar-right">
           <span className="connection-pill"><span className="status-dot" /> LOCAL VISION</span>
           <button className="icon-button" onClick={() => setShowHelp(true)} aria-label="Help"><CircleHelp size={18} /></button>
+          <button className="icon-button theme-toggle" onClick={() => setTheme((value) => value === 'dark' ? 'light' : 'dark')} aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'} title={theme === 'dark' ? 'Light mode' : 'Dark mode'}>{theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}</button>
           <button className="icon-button" onClick={() => setShowHelp(true)} aria-label="Settings"><Settings2 size={18} /></button>
           <div className="avatar">NX</div>
         </div>
@@ -669,7 +678,7 @@ export default function App() {
                 </div>}
                 {activeExperience.id === 'holodesk' && <HoloDeskScene inputRef={handInputRef} cameraEnabled={cameraOn} />}
                 {activeExperience.id === 'shadowstrike' && <ShadowStrikeGame bodyInputRef={bodyInputRef} cameraEnabled={cameraOn} />}
-                {activeExperience.id === 'airos' && <AirOSDesktop inputRef={handInputRef} cameraEnabled={cameraOn} />}
+                {activeExperience.id === 'airos' && <AirOSDesktop inputRef={handInputRef} cameraEnabled={cameraOn} onSwitchExperience={openExperience} />}
                 {activeExperience.id === 'realityscan' && <RealityScanOverlay active={cameraOn} videoRef={videoRef} onStatusChange={setCameraStatus} />}
               </div>
               <div className="camera-footer">
@@ -738,7 +747,7 @@ export default function App() {
         </section>
       )}
 
-      {showHelp && <div className="modal-backdrop" role="presentation" onClick={() => setShowHelp(false)}><section className="help-modal" role="dialog" aria-modal="true" aria-labelledby="help-title" onClick={(event) => event.stopPropagation()}><button className="modal-close" onClick={() => setShowHelp(false)} aria-label="Close help"><X size={18} /></button><div className="modal-icon"><CircleHelp size={22} /></div><div className="eyebrow">QUICK GUIDE</div><h2 id="help-title">Welcome to Nexus.</h2><p>Nexus is an experimental playground for camera-based interaction. Choose an experience to enter its workspace, then enable the camera to test the shared hand-tracking engine.</p><div className="help-list"><div><Camera size={16} /><span><strong>Camera access</strong><small>Requested only when you press Enable camera. Use HTTPS or localhost.</small></span></div><div><ShieldCheck size={16} /><span><strong>Privacy</strong><small>Video is processed in your browser and is not uploaded by this app.</small></span></div><div><Maximize2 size={16} /><span><strong>Good tracking</strong><small>Use bright, even light and keep your hand fully visible.</small></span></div></div><button className="button button-primary modal-done" onClick={() => setShowHelp(false)}>Got it <Check size={16} /></button></section></div>}
+      {showHelp && <div className="modal-backdrop" role="presentation" onClick={() => setShowHelp(false)}><section className="help-modal" role="dialog" aria-modal="true" aria-labelledby="help-title" onClick={(event) => event.stopPropagation()}><button className="modal-close" onClick={() => setShowHelp(false)} aria-label="Close help"><X size={18} /></button><div className="modal-icon"><CircleHelp size={22} /></div><div className="eyebrow">QUICK GUIDE</div><h2 id="help-title">Welcome to Nexus.</h2><p>Nexus is an experimental playground for camera-based interaction. Choose an experience to enter its workspace, then enable the camera to test the shared tracking engine. Switch between light and dark themes using the sun/moon button in the top bar.</p><div className="help-list"><div><Camera size={16} /><span><strong>Camera access</strong><small>Requested only when you press Enable camera. Use HTTPS or localhost.</small></span></div><div><ShieldCheck size={16} /><span><strong>Privacy</strong><small>Video is processed in your browser and is not uploaded by this app.</small></span></div><div><Maximize2 size={16} /><span><strong>Good tracking</strong><small>Use bright, even light and keep your hand fully visible.</small></span></div><div><Hand size={16} /><span><strong>HoloDesk & AirOS</strong><small>Move your hand to move the cursor. Pinch thumb and index finger to grab the HoloDesk object or an AirOS window title; release to drop it.</small></span></div><div><Target size={16} /><span><strong>ShadowStrike</strong><small>Move your body to steer, raise a hand to strike, and jump to dodge. Keep your full body in view.</small></span></div><div><ScanLine size={16} /><span><strong>RealityScan Live</strong><small>Point the camera at everyday objects. This experience detects objects rather than using hand gestures to operate every control.</small></span></div></div><button className="button button-primary modal-done" onClick={() => setShowHelp(false)}>Got it <Check size={16} /></button></section></div>}
     </main>
   );
 }
