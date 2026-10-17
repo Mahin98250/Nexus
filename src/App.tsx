@@ -146,7 +146,7 @@ export default function App() {
       const hand = handInputRef.current;
       // AirOS owns its internal cursor and window gestures. ShadowStrike uses
       // full-body controls, so avoid competing with its hand/body camera pipeline.
-      const enabled = cameraOn && active !== 'airos' && active !== 'shadowstrike';
+      const enabled = cameraOn && active !== 'shadowstrike';
       if (!enabled || !hand.detected) {
         cursor.style.visibility = 'hidden';
         clearHover();
@@ -158,16 +158,23 @@ export default function App() {
       const normalizedX = active === 'realityscan' ? 1 - hand.x : hand.x;
       const x = clampGesturePointer(normalizedX);
       const y = clampGesturePointer(hand.y);
+      const hit = document.elementFromPoint(x * window.innerWidth, y * window.innerHeight) as HTMLElement | null;
+      // AirOS draws its own low-latency cursor inside the desktop surface. Keep
+      // that cursor exclusive there, but allow the global cursor to operate the
+      // workspace toolbar and camera controls outside the desktop.
+      if (active === 'airos' && hit?.closest('.air-os-layer')) {
+        cursor.style.visibility = 'hidden';
+        clearHover();
+        globalPinchDownRef.current = hand.pinch;
+        frame = requestAnimationFrame(tick);
+        return;
+      }
       cursor.style.visibility = 'visible';
       cursor.style.left = (x * 100) + 'vw';
       cursor.style.top = (y * 100) + 'vh';
       cursor.classList.toggle('global-gesture-pinching', hand.pinch);
-      const hit = document.elementFromPoint(x * window.innerWidth, y * window.innerHeight) as HTMLElement | null;
       const target = hit?.closest<HTMLElement>('.app-shell button:not(:disabled), .app-shell [role="button"], .app-shell a[href]') ?? null;
-      if (target && target.closest('.air-os-layer')) {
-        // AirOS is deliberately excluded here; its own gesture controller handles it.
-        clearHover();
-      } else {
+      {
         if (target !== globalHoveredElementRef.current) {
           clearHover();
           target?.classList.add('global-gesture-hover');
@@ -180,7 +187,7 @@ export default function App() {
       globalPinchDownRef.current = hand.pinch;
       frame = requestAnimationFrame(tick);
     };
-    if (cameraOn && active !== 'airos' && active !== 'shadowstrike') {
+    if (cameraOn && active !== 'shadowstrike') {
       frame = requestAnimationFrame(tick);
     } else {
       cursor.style.visibility = 'hidden';
@@ -769,7 +776,7 @@ export default function App() {
                 </div>}
                 {activeExperience.id === 'holodesk' && <HoloDeskScene inputRef={handInputRef} cameraEnabled={cameraOn} />}
                 {activeExperience.id === 'shadowstrike' && <ShadowStrikeGame bodyInputRef={bodyInputRef} cameraEnabled={cameraOn} />}
-                {activeExperience.id === 'airos' && <AirOSDesktop inputRef={handInputRef} cameraEnabled={cameraOn} onSwitchExperience={handleAirOSNavigation} />}
+                {activeExperience.id === 'airos' && <AirOSDesktop inputRef={handInputRef} cameraEnabled={cameraOn} onSwitchExperience={handleAirOSNavigation} theme={theme} onToggleTheme={() => setTheme((value) => value === 'dark' ? 'light' : 'dark')} />}
                 {activeExperience.id === 'realityscan' && <RealityScanOverlay active={cameraOn} videoRef={videoRef} onStatusChange={setCameraStatus} />}
               </div>
               <div className="camera-footer">
