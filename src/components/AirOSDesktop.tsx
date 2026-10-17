@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import type { HandInputRef } from '../vision/types';
 import { AirHandCursorSmoother } from '../vision/airHandEngine';
+import { GestureActivationGate } from '../vision/gestureNavigation';
 
 type WindowId = 'browser' | 'notes' | 'terminal' | 'music';
 type NexusModeId = 'home' | 'holodesk' | 'shadowstrike' | 'airos' | 'realityscan';
@@ -36,6 +37,7 @@ export default function AirOSDesktop({ inputRef, cameraEnabled, onSwitchExperien
   const cursorRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<DragState | null>(null);
   const lastPinchRef = useRef(false);
+  const gestureActivationGateRef = useRef(new GestureActivationGate());
   const lastGesturePositionRef = useRef({ x: Number.NaN, y: Number.NaN });
   const smoothedHandPositionRef = useRef(new AirHandCursorSmoother());
   const cameraRef = useRef(cameraEnabled);
@@ -307,6 +309,7 @@ export default function AirOSDesktop({ inputRef, cameraEnabled, onSwitchExperien
       const hand = cameraRef.current ? inputRef.current : null;
       const cursor = cursorRef.current;
       const detected = Boolean(hand?.detected);
+      const gestureClickStarted = gestureActivationGateRef.current.update(detected, Boolean(detected && hand?.pinch));
       cursor.style.visibility = detected ? 'visible' : 'hidden';
       if (!detected && hoveredTargetRef.current) {
         hoveredTargetRef.current.classList.remove('air-hand-hover');
@@ -327,7 +330,7 @@ export default function AirOSDesktop({ inputRef, cameraEnabled, onSwitchExperien
           hoverTarget?.classList.add('air-hand-hover');
           hoveredTargetRef.current = hoverTarget ?? null;
         }
-        if (hand.pinch && !lastPinchRef.current) {
+        if (gestureClickStarted) {
           const inputTarget = hitElement?.closest<HTMLElement>('input, textarea, select');
           const buttonTarget = hitElement?.closest<HTMLElement>('button:not(:disabled), [role="button"], [data-air-gesture-click]');
           if (inputTarget && host.contains(inputTarget)) {
