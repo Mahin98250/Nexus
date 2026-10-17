@@ -11,9 +11,9 @@ import RealityScanOverlay from './components/RealityScanOverlay';
 import HoloDeskScene from './components/HoloDeskScene';
 import { deriveHandInput } from './vision/gestures';
 import { deriveBodyInput } from './vision/bodyGestures';
-import { AirHandGestureStabilizer, type AirHandGesture } from './vision/airHandEngine';
+import { AirHandCursorSmoother, AirHandGestureStabilizer, type AirHandGesture } from './vision/airHandEngine';
 import { getRuntimeErrorDetails } from './vision/runtimeErrors';
-import { clampGesturePointer, shouldActivateGestureTarget } from './vision/gestureNavigation';
+import { clampGesturePointer, GestureActivationGate } from './vision/gestureNavigation';
 import { EMPTY_BODY_INPUT, EMPTY_HAND_INPUT, type BodyInput, type HandInput, type Landmark } from './vision/types';
 
 function getAirHandFrameGuidance(landmarks: readonly Landmark[] | undefined): string {
@@ -110,7 +110,8 @@ export default function App() {
   const handInputRef = useRef<HandInput>({ ...EMPTY_HAND_INPUT });
   const globalGestureCursorRef = useRef<HTMLDivElement>(null);
   const globalHoveredElementRef = useRef<HTMLElement | null>(null);
-  const globalPinchDownRef = useRef(false);
+  const globalGestureActivationGateRef = useRef(new GestureActivationGate());
+  const globalCursorSmootherRef = useRef(new AirHandCursorSmoother());
   const bodyInputRef = useRef<BodyInput>({ ...EMPTY_BODY_INPUT });
   const videoRef = useRef<HTMLVideoElement>(null);
   const gestureRecognizerRef = useRef<GestureRecognizer | null>(null);
@@ -147,17 +148,30 @@ export default function App() {
       // AirOS owns its internal cursor and window gestures. ShadowStrike uses
       // full-body controls, so avoid competing with its hand/body camera pipeline.
       const enabled = cameraOn && active !== 'shadowstrike';
-      if (!enabled || !hand.detected) {
+      if (!enabled) {
         cursor.style.visibility = 'hidden';
+        cursor.classList.remove('global-gesture-pinching');
         clearHover();
-        globalPinchDownRef.current = false;
-        if (enabled) frame = requestAnimationFrame(tick);
+        globalGestureActivationGateRef.current.reset();
+        return;
+      }
+      const clickStarted = globalGestureActivationGateRef.current.update(hand.detected, hand.detected && hand.pinch);
+      if (!hand.detected) {
+        // Tracking loss hides interaction and disarms clicks until a visible release.
+        // Do not let a held pinch accidentally activate again when the hand reappears.
+        cursor.style.visibility = 'hidden';
+        cursor.classList.remove('global-gesture-pinching');
+        clearHover();
+        frame = requestAnimationFrame(tick);
         return;
       }
       // The rear-camera RealityScan preview is not mirrored; undo the standard selfie mirror there.
       const normalizedX = active === 'realityscan' ? 1 - hand.x : hand.x;
-      const x = clampGesturePointer(normalizedX);
-      const y = clampGesturePointer(hand.y);
+      const rawX = clampGesturePointer(normalizedX);
+      const rawY = clampGesturePointer(hand.y);
+      const smoothed = globalCursorSmootherRef.current.update(rawX, rawY, performance.now());
+      const x = clampGesturePointer(smoothed.x);
+      const y = clampGesturePointer(smoothed.y);
       const hit = document.elementFromPoint(x * window.innerWidth, y * window.innerHeight) as HTMLElement | null;
       // AirOS draws its own low-latency cursor inside the desktop surface. Keep
       // that cursor exclusive there, but allow the global cursor to operate the
@@ -165,7 +179,6 @@ export default function App() {
       if (active === 'airos' && hit?.closest('.air-os-layer')) {
         cursor.style.visibility = 'hidden';
         clearHover();
-        globalPinchDownRef.current = hand.pinch;
         frame = requestAnimationFrame(tick);
         return;
       }
@@ -180,11 +193,8 @@ export default function App() {
           target?.classList.add('global-gesture-hover');
           globalHoveredElementRef.current = target;
         }
-        if (shouldActivateGestureTarget(hand.detected, hand.pinch, globalPinchDownRef.current) && target) {
-          target.click();
-        }
+        if (clickStarted && target) target.click();
       }
-      globalPinchDownRef.current = hand.pinch;
       frame = requestAnimationFrame(tick);
     };
     if (cameraOn && active !== 'shadowstrike') {
@@ -192,13 +202,14 @@ export default function App() {
     } else {
       cursor.style.visibility = 'hidden';
       clearHover();
-      globalPinchDownRef.current = false;
+      globalGestureActivationGateRef.current.reset();
     }
     return () => {
       cancelAnimationFrame(frame);
       clearHover();
       cursor.style.visibility = 'hidden';
-      globalPinchDownRef.current = false;
+      cursor.classList.remove('global-gesture-pinching');
+      globalGestureActivationGateRef.current.reset();
     };
   }, [active, cameraOn]);
 
