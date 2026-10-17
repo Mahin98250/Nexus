@@ -53,6 +53,15 @@ describe('AirHand gesture and cursor primitives', () => {
     expect(moved.x).toBeLessThan(0.9);
   });
 
+  it('ignores invalid calibration samples and requires movement on both axes', () => {
+    const calibration = new AirHandCursorCalibrator();
+    calibration.add(Number.NaN, 0.5);
+    calibration.add(0.2, 0.2);
+    calibration.add(0.2, 0.8);
+    expect(calibration.sampleCount()).toBe(2);
+    expect(calibration.finish()).toBeNull();
+  });
+
   it('rejects narrow calibration and maps valid calibrated bounds', () => {
     const tooNarrow = new AirHandCursorCalibrator();
     for (let i = 0; i < 25; i++) tooNarrow.add(0.45 + i * 0.001, 0.45 + i * 0.001);
