@@ -35,7 +35,7 @@ describe('deriveHandInput', () => {
     const input = deriveHandInput(landmarks, 100);
     expect(input.detected).toBe(true);
     expect(input.x).toBeCloseTo((0.28 - 0.08) / 0.84);
-    expect(input.y).toBeCloseTo(0.31);
+    expect(input.y).toBeCloseTo((0.31 - 0.08) / 0.84);
     expect(input.timestamp).toBe(100);
   });
 
