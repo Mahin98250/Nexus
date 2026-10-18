@@ -5,7 +5,7 @@ import { Activity, AlertTriangle, Camera, HeartPulse, ScanFace, ShieldCheck, Wav
 type Props = { cameraEnabled: boolean; videoRef: RefObject<HTMLVideoElement>; handInputRef: HandInputRef };
 type Sample = { at: number; r: number; g: number; b: number };
 type PulseEstimate = { bpm: number; confidence: number; quality: 'low' | 'fair' | 'good' };
-type SignalMetrics = { variability: number | null; stability: number | null; redMean: number; greenMean: number; blueMean: number; sampleRate: number; motion: 'low' | 'moderate' | 'high' };
+type SignalMetrics = { variability: number | null; stability: number | null; redMean: number; greenMean: number; blueMean: number; sampleRate: number; motion: 'low' | 'moderate' | 'high' };\ntype EmotionResult = { dominant_emotion: string; emotion_scores: Record<string, number>; face_confidence: number | null; model: string };
 type FaceBox = { x: number; y: number; width: number; height: number };
 type FaceDetectorLike = { detect: (source: CanvasImageSource) => Promise<Array<{ boundingBox: DOMRectReadOnly }>>; close?: () => void };
 type FaceDetectorConstructor = new (options?: { fastMode?: boolean; maxDetectedFaces?: number }) => FaceDetectorLike;
@@ -87,7 +87,7 @@ export default function BiometricsMonitor({ cameraEnabled, videoRef, handInputRe
   const [quality, setQuality] = useState<'waiting' | 'face-area' | 'lighting' | 'collecting' | 'low-fps' | 'ready'>('waiting');
   const [signalLevel, setSignalLevel] = useState(0);
   const [signalMetrics, setSignalMetrics] = useState<SignalMetrics>({ variability: null, stability: null, redMean: 0, greenMean: 0, blueMean: 0, sampleRate: 0, motion: 'low' });
-  const [showResearchPanel, setShowResearchPanel] = useState(true);
+  const [showResearchPanel, setShowResearchPanel] = useState(true);\n  const [emotionEndpoint, setEmotionEndpoint] = useState('http://127.0.0.1:8000');\n  const [emotionEnabled, setEmotionEnabled] = useState(false);\n  const [emotionLoading, setEmotionLoading] = useState(false);\n  const [emotionResult, setEmotionResult] = useState<EmotionResult | null>(null);\n  const [emotionError, setEmotionError] = useState('');\n  const emotionRequestRef = useRef(false);
   const [faceTracking, setFaceTracking] = useState<'native' | 'fallback' | 'unavailable'>('fallback');
   const [faceFrame, setFaceFrame] = useState({ x: 0.28, y: 0.14, width: 0.44, height: 0.58 });
   const [notes, setNotes] = useState('Sit still, face the camera, and use steady, bright light.');
@@ -255,7 +255,49 @@ export default function BiometricsMonitor({ cameraEnabled, videoRef, handInputRe
     };
   }, [paused, videoRef]);
 
-  const statusText = {
+
+  // Emotion analysis is strictly opt-in. Frames are sent only to the endpoint the user configures.
+  useEffect(() => {
+    if (!cameraEnabled || !emotionEnabled) return;
+    let cancelled = false;
+    const analyzeFrame = async () => {
+      if (cancelled || emotionRequestRef.current) return;
+      const video = videoRef.current;
+      if (!video || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA || video.videoWidth < 1) return;
+      emotionRequestRef.current = true;
+      setEmotionLoading(true);
+      setEmotionError('');
+      try {
+        const url = new URL(emotionEndpoint.trim());
+        if (!['http:', 'https:'].includes(url.protocol)) throw new Error('Use an http:// or https:// API endpoint.');
+        const canvas = document.createElement('canvas');
+        const scale = Math.min(1, 640 / video.videoWidth, 480 / video.videoHeight);
+        canvas.width = Math.max(1, Math.round(video.videoWidth * scale));
+        canvas.height = Math.max(1, Math.round(video.videoHeight * scale));
+        const context = canvas.getContext('2d');
+        if (!context) throw new Error('Could not prepare a camera frame.');
+        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.78));
+        if (!blob) throw new Error('Could not encode a camera frame.');
+        const form = new FormData();
+        form.append('image', blob, 'vitalsense-frame.jpg');
+        const response = await fetch(url.origin + url.pathname.replace(/\\/$/, '') + '/analyze', { method: 'POST', body: form });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(typeof payload.detail === 'string' ? payload.detail : 'Classifier request failed (' + response.status + ').');
+        if (!payload || typeof payload.dominant_emotion !== 'string' || !payload.emotion_scores) throw new Error('The API response did not match the expected DeepFace format.');
+        if (!cancelled) setEmotionResult(payload as EmotionResult);
+      } catch (error) {
+        if (!cancelled) setEmotionError(error instanceof Error ? error.message : 'Unable to reach the classifier API.');
+      } finally {
+        emotionRequestRef.current = false;
+        if (!cancelled) setEmotionLoading(false);
+      }
+    };
+    void analyzeFrame();
+    const timer = window.setInterval(() => { void analyzeFrame(); }, 2500);
+    return () => { cancelled = true; window.clearInterval(timer); emotionRequestRef.current = false; setEmotionLoading(false); };
+  }, [cameraEnabled, emotionEnabled, emotionEndpoint, videoRef]);
+\n  const statusText = {
     waiting: 'READY WHEN YOU ARE', 'face-area': 'CHECK FACE POSITION / MOTION',
     lighting: 'CHECK LIGHTING', collecting: 'COLLECTING SIGNAL',
     'low-fps': 'SIGNAL TOO WEAK', ready: 'EXPERIMENTAL ESTIMATE',
@@ -318,7 +360,24 @@ export default function BiometricsMonitor({ cameraEnabled, videoRef, handInputRe
               <div><span>FACE / MOTION STATUS</span><strong>{signalMetrics.motion.toUpperCase()}</strong><small>{faceTracking === 'native' ? 'Browser FaceDetector available' : faceTracking === 'fallback' ? 'Center-region fallback; face not verified' : 'Face detection unavailable'}</small></div>
             </div>
             <div className="bio-rgb-strip"><span>MEAN RGB INTENSITY</span><div><i style={{ width: Math.min(100, signalMetrics.redMean / 255 * 100) + '%', background: '#f0808b' }} /><b>R {signalMetrics.redMean ? Math.round(signalMetrics.redMean) : '—'}</b></div><div><i style={{ width: Math.min(100, signalMetrics.greenMean / 255 * 100) + '%', background: '#78d6a4' }} /><b>G {signalMetrics.greenMean ? Math.round(signalMetrics.greenMean) : '—'}</b></div><div><i style={{ width: Math.min(100, signalMetrics.blueMean / 255 * 100) + '%', background: '#80aaff' }} /><b>B {signalMetrics.blueMean ? Math.round(signalMetrics.blueMean) : '—'}</b></div></div>
-            <div className="bio-method-note"><strong>Emotion / micro-expression module</strong><p>No facial emotion classifier is currently loaded. A future DeepFace/OpenFace service would need explicit model setup, consent, and validation; this browser build will not invent emotion labels from facial motion.</p></div>
+
+            <div className="bio-method-note bio-emotion-module">
+              <div className="bio-emotion-heading"><strong><ScanFace size={15} /> DEEPFACE · EXPRESSION CLASSIFIER</strong><span className={emotionEnabled ? 'bio-emotion-state active' : 'bio-emotion-state'}>{emotionEnabled ? 'RUNNING' : 'OFF'}</span></div>
+              <p>Optional frame-by-frame facial-expression estimates using the local DeepFace API. This is not a validated micro-expression detector, and labels are not proof of a person's internal emotion.</p>
+              <label className="bio-mood-label" htmlFor="bio-emotion-endpoint">Classifier API endpoint</label>
+              <input id="bio-emotion-endpoint" className="bio-emotion-endpoint" value={emotionEndpoint} onChange={(event) => setEmotionEndpoint(event.currentTarget.value)} disabled={emotionEnabled} spellCheck={false} />
+              <div className="bio-emotion-actions">
+                <button className="button button-primary" disabled={!cameraEnabled || emotionLoading && !emotionEnabled} onClick={() => { setEmotionError(''); setEmotionResult(null); setEmotionEnabled((value) => !value); }}>{emotionEnabled ? 'Stop classifier' : 'I consent · Start expression analysis'}</button>
+                {emotionLoading && <span>Analyzing frame…</span>}
+              </div>
+              {!cameraEnabled && <p className="bio-emotion-message">Enable the camera before starting expression analysis.</p>}
+              {emotionError && <p className="bio-emotion-error" role="alert">{emotionError} Check that the API is running and allows this website in its CORS settings.</p>}
+              {emotionResult && <div className="bio-emotion-result" aria-live="polite">
+                <div><span>DOMINANT LABEL · MODEL OUTPUT</span><strong>{emotionResult.dominant_emotion}</strong><small>{emotionResult.model || 'DeepFace'} · face confidence {typeof emotionResult.face_confidence === 'number' ? Math.round(emotionResult.face_confidence * 100) + '%' : 'not supplied'}</small></div>
+                <div className="bio-emotion-scores">{Object.entries(emotionResult.emotion_scores).sort((a, b) => b[1] - a[1]).slice(0, 7).map(([label, score]) => <div key={label}><span>{label}</span><div><i style={{ width: Math.max(0, Math.min(100, score)) + '%' }} /></div><b>{Math.round(score)}%</b></div>)}</div>
+              </div>}
+              <p className="bio-disclaimer"><ShieldCheck size={14} /> Explicit opt-in required. When running, still frames are sent about every 2.5 seconds to the endpoint above. The included backend processes frames in memory and does not save them. Do not use this for diagnosis, hiring, discipline, or consequential decisions.</p>
+            </div>
             <div className="bio-method-note"><strong>Stress / cognitive load</strong><p>Not inferred from video. rPPG variability and face motion are affected by illumination, movement, camera auto-exposure, and environment. Use the cognitive check-in to record your own focus and load.</p></div>
           </div>}
         </section>
