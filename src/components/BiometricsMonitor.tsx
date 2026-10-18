@@ -287,7 +287,7 @@ export default function BiometricsMonitor({ cameraEnabled, videoRef, handInputRe
     setEmotionApiStatus('checking');
     setEmotionError('');
     try {
-      const response = await fetch(cancelledEndpoint.toString().replace(/\\/+$/, '') + '/health', { method: 'GET' });
+      const response = await fetch(cancelledEndpoint.toString().replace(/\/+$/, '') + '/health', { method: 'GET' });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok || payload.status !== 'ok') throw new Error('API health check failed. Start the DeepFace service and check its CORS settings.');
       setEmotionApiStatus('online');
