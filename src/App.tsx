@@ -90,6 +90,8 @@ const visionWasmCandidates = [
 // Some mobile networks can load the camera but block or interrupt Google Cloud Storage.
 // Keep a second model mirror so camera permission success is not mistaken for model success.
 const handModelCandidates = [
+  // Serve the model from this origin first so mobile networks do not need to reach model CDNs.
+  '/Nexus/mediapipe/models/hand_landmarker.task',
   'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task',
   'https://github.com/sanderdesnaijer/mediapipe-model-mirrors/releases/download/v1/hand_landmarker.task',
 ];
