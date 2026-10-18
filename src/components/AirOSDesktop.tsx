@@ -280,7 +280,7 @@ export default function AirOSDesktop({ inputRef, cameraEnabled, onSwitchExperien
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, []);
+  }, [desktopCleared, windows]);
 
   useEffect(() => {
     const interval = window.setInterval(() => setClock(new Date()), 15000);
