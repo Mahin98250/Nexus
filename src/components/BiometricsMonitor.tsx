@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
+import type { HandInputRef } from '../vision/types';
 import { Activity, AlertTriangle, Camera, HeartPulse, ShieldCheck, Waves } from 'lucide-react';
 
-type Props = { cameraEnabled: boolean; videoRef: RefObject<HTMLVideoElement> };
+type Props = { cameraEnabled: boolean; videoRef: RefObject<HTMLVideoElement>; handInputRef: HandInputRef };
 type Sample = { at: number; r: number; g: number; b: number };
 type PulseEstimate = { bpm: number; confidence: number; quality: 'low' | 'fair' | 'good' };
 type FaceBox = { x: number; y: number; width: number; height: number };
@@ -54,7 +55,7 @@ function estimatePulse(samples: Sample[]): PulseEstimate | null {
   return { bpm, confidence, quality: confidence >= 0.22 ? 'good' : confidence >= 0.1 ? 'fair' : 'low' };
 }
 
-export default function BiometricsMonitor({ cameraEnabled, videoRef }: Props) {
+export default function BiometricsMonitor({ cameraEnabled, videoRef, handInputRef }: Props) {
   const [focus, setFocus] = useState(50);
   const [load, setLoad] = useState(35);
   const [running, setRunning] = useState(false);
@@ -64,6 +65,11 @@ export default function BiometricsMonitor({ cameraEnabled, videoRef }: Props) {
   const [signalLevel, setSignalLevel] = useState(0);
   const [faceFrame, setFaceFrame] = useState({ x: 0.28, y: 0.14, width: 0.44, height: 0.58 });
   const [notes, setNotes] = useState('Sit still, face the camera, and use steady, bright light.');
+  const [mode, setMode] = useState<'signals' | 'checkin'>('signals');
+  const [showGestureGuide, setShowGestureGuide] = useState(false);
+  const [mood, setMood] = useState('Neutral');
+  const [gestureHint, setGestureHint] = useState('Move your hand pointer over a slider and pinch to adjust it.');
+  const previousPinchRef = useRef(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const samplesRef = useRef<Sample[]>([]);
   const frameRef = useRef<number | null>(null);
@@ -71,6 +77,49 @@ export default function BiometricsMonitor({ cameraEnabled, videoRef }: Props) {
   const lastUiAtRef = useRef(0);
   const lastMotionRef = useRef<{ x: number; y: number } | null>(null);
   const paused = !cameraEnabled || !running;
+
+  // Pinch-and-move directly adjusts VitalSense sliders; shared Nexus controls handle button clicks.
+  useEffect(() => {
+    if (!cameraEnabled) {
+      previousPinchRef.current = false;
+      return;
+    }
+    let frame = 0;
+    let lastUi = 0;
+    const tick = (now: number) => {
+      frame = requestAnimationFrame(tick);
+      const hand = handInputRef.current;
+      if (!hand.detected) {
+        previousPinchRef.current = false;
+        return;
+      }
+      const x = Math.max(0, Math.min(1, hand.x));
+      const y = Math.max(0, Math.min(1, hand.y));
+      const target = document.elementFromPoint(x * window.innerWidth, y * window.innerHeight);
+      const slider = target instanceof HTMLInputElement && target.type === 'range' && target.closest('.biometrics-layout') ? target : null;
+      if (hand.pinch && slider) {
+        const rect = slider.getBoundingClientRect();
+        const ratio = Math.max(0, Math.min(1, (x * window.innerWidth - rect.left) / Math.max(rect.width, 1)));
+        const min = Number(slider.min || 0), max = Number(slider.max || 100), step = Number(slider.step || 1);
+        const next = Math.max(min, Math.min(max, min + Math.round((ratio * (max - min)) / step) * step));
+        if (now - lastUi > 35 && Number(slider.value) !== next) {
+          const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+          setter?.call(slider, String(next));
+          slider.dispatchEvent(new Event('input', { bubbles: true }));
+          slider.dispatchEvent(new Event('change', { bubbles: true }));
+          lastUi = now;
+          setGestureHint('Adjusting ' + (slider.id === 'bio-focus' ? 'focus' : slider.id === 'bio-load' ? 'mental load' : 'control') + ' · ' + next + '%');
+        }
+      } else if (hand.pinch && !previousPinchRef.current && target instanceof HTMLElement && target.closest('.biometrics-layout button')) {
+        setGestureHint('Pinch recognized · activating control');
+      } else if (!hand.pinch && previousPinchRef.current) {
+        setGestureHint('Gesture released · ready for next action');
+      }
+      previousPinchRef.current = hand.pinch;
+    };
+    frame = requestAnimationFrame(tick);
+    return () => { cancelAnimationFrame(frame); previousPinchRef.current = false; };
+  }, [cameraEnabled, handInputRef]);
 
   useEffect(() => {
     samplesRef.current = [];
@@ -189,10 +238,21 @@ export default function BiometricsMonitor({ cameraEnabled, videoRef }: Props) {
           <div><span className="bio-eyebrow"><Activity size={14} /> SIGNAL LAB / BROWSER-LOCAL</span><h2>Physiology, with context.</h2><p>Explore camera color signals and attention self-checks. These are estimates, not diagnoses.</p></div>
           <span className={'bio-status ' + quality}><span className="status-dot" />{statusText[quality]}</span>
         </div>
+        <div className="bio-modebar" role="tablist" aria-label="VitalSense modes">
+          <button role="tab" aria-selected={mode === 'signals'} className={mode === 'signals' ? 'is-active' : ''} onClick={() => setMode('signals')}>01 · Signal monitor</button>
+          <button role="tab" aria-selected={mode === 'checkin'} className={mode === 'checkin' ? 'is-active' : ''} onClick={() => setMode('checkin')}>02 · Cognitive check-in</button>
+          <button className="bio-manual-trigger" onClick={() => setShowGestureGuide((value) => !value)}>{showGestureGuide ? 'Hide gesture manual' : 'Gesture manual'}</button>
+        </div>
+        {showGestureGuide && <section className="bio-gesture-manual" aria-label="VitalSense gesture manual">
+          <strong>VITALSENSE · HAND CONTROLS</strong>
+          <p><b>Move open hand:</b> move the pointer. <b>Pinch and release:</b> activate a highlighted button once. <b>Pinch and move over a slider:</b> adjust focus or mental-load values. <b>Open your fingers:</b> release the control.</p>
+          <p>Enable the camera first. Keep the hand visible and use slow movements. Keyboard, mouse, and touch remain available.</p>
+        </section>}
+        {cameraEnabled && <div className="bio-gesture-feedback"><span className={handInputRef.current.detected ? 'status-dot active' : 'status-dot'} /> {gestureHint}</div>}
         {!cameraEnabled && <div className="bio-callout"><Camera size={18} /><div><strong>Camera is off</strong><span>Enable the camera using the control above. Nothing starts automatically.</span></div></div>}
         {cameraEnabled && <div className="bio-consent-note"><ShieldCheck size={15} /> Camera frames are sampled in this tab. Raw video and samples are not saved or uploaded.</div>}
         {cameraEnabled && <div className="bio-controls"><button className="button button-primary" onClick={() => setRunning((value) => !value)}>{running ? 'Pause signal sampling' : 'Start signal sampling'}</button><span>Sampling is off until you start it.</span></div>}
-        <div className="biometrics-grid">
+        <div className={"biometrics-grid " + (mode === "checkin" ? "bio-checkin-mode" : "bio-signals-mode")}>
           <section className="bio-panel bio-pulse-panel">
             <div className="bio-panel-top"><span><HeartPulse size={15} /> rPPG / PULSE</span><span>RGB · SPECTRUM CANDIDATE</span></div>
             <div className="bio-face-preview">
@@ -202,7 +262,7 @@ export default function BiometricsMonitor({ cameraEnabled, videoRef }: Props) {
             </div>
             <div className="bio-heart-metric"><div><span className="field-label">ESTIMATED PULSE</span><div className="bio-bpm">{pulse ? pulse.bpm : '—'} <small>BPM</small></div></div><div className="bio-confidence"><span className="field-label">SIGNAL QUALITY</span><strong className={pulse?.quality ?? 'low'}>{pulse ? pulse.quality.toUpperCase() : 'NOT READY'}</strong><span>{signals.length} samples</span></div></div>
             <div className="bio-signal-bars"><span>CAMERA LIGHT</span><div><i style={{ width: signalLevel + '%' }} /></div></div>
-            <div className="bio-trace" aria-hidden="true">{Array.from({ length: 42 }, (_, index) => <i key={index} style={{ height: (8 + Math.abs(Math.sin(index * 0.72) * 15 + Math.cos(index * 0.19) * 8)) + 'px' }} />)}</div>
+            <div className="bio-trace" aria-label="Live camera color signal">{Array.from({ length: 42 }, (_, index) => { const windowed = signals.slice(-42); const sample = windowed[index]; const baseline = windowed.length ? mean(windowed.map((item) => item.g)) : 128; const height = sample ? 7 + Math.min(25, Math.abs(sample.g - baseline) * 1.8) : 3; return <i key={index} style={{ height: height + 'px', opacity: sample ? 0.9 : 0.18 }} />; })}</div>
             <p className="bio-signal-note">{notes}</p>
             <p className="bio-disclaimer"><AlertTriangle size={14} /> Experimental rPPG estimate only. Lighting, motion, camera processing and skin tone can distort readings. Do not use this for medical decisions.</p>
           </section>
@@ -210,8 +270,10 @@ export default function BiometricsMonitor({ cameraEnabled, videoRef }: Props) {
             <div className="bio-panel-top"><span><Waves size={15} /> COGNITIVE CHECK-IN</span><span>SELF-REPORTED</span></div>
             <p className="bio-explainer">A webcam cannot reliably tell you how focused or stressed you feel. Record your own state to compare with the camera signal during an experiment.</p>
             <div className="bio-self-report"><label htmlFor="bio-focus">How focused do you feel?</label><input id="bio-focus" type="range" min="0" max="100" value={focus} onChange={(event) => setFocus(Number(event.currentTarget.value))} /><div><span>Scattered</span><strong>{focus}/100</strong><span>Focused</span></div><label htmlFor="bio-load">How mentally loaded do you feel?</label><input id="bio-load" type="range" min="0" max="100" value={load} onChange={(event) => setLoad(Number(event.currentTarget.value))} /><div><span>Light</span><strong>{load}/100</strong><span>Heavy</span></div></div>
+            <label className="bio-mood-label" htmlFor="bio-mood">How would you describe your current mood? (self-reported)</label>
+            <select id="bio-mood" value={mood} onChange={(event) => setMood(event.currentTarget.value)}><option>Neutral</option><option>Calm</option><option>Positive</option><option>Tired</option><option>Overwhelmed</option><option>Low</option></select>
             <div className="bio-summary-grid"><div><span>FOCUS · YOUR INPUT</span><strong>{focus}%</strong></div><div><span>LOAD · YOUR INPUT</span><strong>{load}%</strong></div></div>
-            <p className="bio-disclaimer"><ShieldCheck size={14} /> Self-report values stay in component memory and are not saved.</p>
+            <p className="bio-disclaimer"><ShieldCheck size={14} /> Focus, mental load, and mood are your own check-ins. They stay in component memory and are not saved.</p>
           </section>
         </div>
         <div className="bio-limits"><strong><AlertTriangle size={15} /> What this can and cannot do</strong><p>This demo visualizes camera signal quality and a rough pulse candidate. It does not detect stress, diagnose a condition, or infer emotion, truthfulness, or cognitive ability from facial movements.</p></div>
