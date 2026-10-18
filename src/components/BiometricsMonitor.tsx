@@ -20,6 +20,28 @@ function mean(values: number[]) {
   return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : 0;
 }
 
+/** Descriptive statistics for the sampled RGB stream; not a diagnosis or emotion model. */
+function analyzeSignal(samples: Sample[], motion: number): SignalMetrics {
+  const recent = samples.slice(-120);
+  const green = recent.map((sample) => sample.g);
+  const intervals = recent.slice(1).map((sample, index) => sample.at - recent[index].at).filter((value) => value > 0);
+  const greenMean = mean(green);
+  const variability = green.length > 8
+    ? Math.sqrt(mean(green.map((value) => (value - greenMean) ** 2)))
+    : null;
+  const normalizedSpread = variability === null ? null : variability / Math.max(greenMean, 1);
+  const stability = normalizedSpread === null ? null : Math.max(0, Math.min(100, 100 - normalizedSpread * 900));
+  return {
+    variability,
+    stability,
+    redMean: mean(recent.map((sample) => sample.r)),
+    greenMean,
+    blueMean: mean(recent.map((sample) => sample.b)),
+    sampleRate: intervals.length ? 1000 / mean(intervals) : 0,
+    motion: motion > 0.035 ? 'high' : motion > 0.012 ? 'moderate' : 'low',
+  };
+}
+
 /** Experimental rPPG baseline. Never treat this as a clinically validated measurement. */
 function estimatePulse(samples: Sample[]): PulseEstimate | null {
   if (samples.length < MIN_SAMPLES || samples[samples.length - 1].at - samples[0].at < MIN_SIGNAL_MS) return null;
@@ -203,6 +225,7 @@ export default function BiometricsMonitor({ cameraEnabled, videoRef, handInputRe
       lastUiAtRef.current = now;
       setSignalLevel(Math.max(0, Math.min(100, (brightness - 20) / 1.6)));
       setSignals(next);
+      setSignalMetrics(analyzeSignal(next, movement));
       if (brightness < 35 || brightness > 235 || spread < 5) {
         setQuality('lighting'); setNotes('Lighting is too dim, washed out, or unstable for a useful signal.'); setPulse(null);
       } else if (movement > 0.035) {
