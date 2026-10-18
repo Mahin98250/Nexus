@@ -94,6 +94,7 @@ export default function BiometricsMonitor({ cameraEnabled, videoRef, handInputRe
   const [emotionLoading, setEmotionLoading] = useState(false);
   const [emotionResult, setEmotionResult] = useState<EmotionResult | null>(null);
   const [emotionError, setEmotionError] = useState('');
+  const [emotionApiStatus, setEmotionApiStatus] = useState<'untested' | 'checking' | 'online' | 'offline'>('untested');
   const emotionRequestRef = useRef(false);
   const [faceTracking, setFaceTracking] = useState<'native' | 'fallback' | 'unavailable'>('fallback');
   const [faceFrame, setFaceFrame] = useState({ x: 0.28, y: 0.14, width: 0.44, height: 0.58 });
@@ -117,6 +118,7 @@ export default function BiometricsMonitor({ cameraEnabled, videoRef, handInputRe
       setEmotionEnabled(false);
       setEmotionResult(null);
       setEmotionError('');
+      setEmotionApiStatus('untested');
     }
   }, [cameraEnabled]);
 
@@ -271,6 +273,29 @@ export default function BiometricsMonitor({ cameraEnabled, videoRef, handInputRe
     };
   }, [paused, videoRef]);
 
+
+  const testEmotionApi = async () => {
+    let cancelledEndpoint: URL;
+    try {
+      cancelledEndpoint = new URL(emotionEndpoint.trim());
+      if (!['http:', 'https:'].includes(cancelledEndpoint.protocol)) throw new Error('Use an http:// or https:// API endpoint.');
+    } catch (error) {
+      setEmotionApiStatus('offline');
+      setEmotionError(error instanceof Error ? error.message : 'Enter a valid API endpoint.');
+      return;
+    }
+    setEmotionApiStatus('checking');
+    setEmotionError('');
+    try {
+      const response = await fetch(cancelledEndpoint.toString().replace(/\\/+$/, '') + '/health', { method: 'GET' });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || payload.status !== 'ok') throw new Error('API health check failed. Start the DeepFace service and check its CORS settings.');
+      setEmotionApiStatus('online');
+    } catch {
+      setEmotionApiStatus('offline');
+      setEmotionError('Cannot reach the DeepFace API. Start services/deepface locally or enter a reachable HTTPS API URL. GitHub Pages does not host the Python model.');
+    }
+  };
 
   // Emotion analysis is strictly opt-in. Frames are sent only to the endpoint the user configures.
   useEffect(() => {
