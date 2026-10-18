@@ -13,8 +13,11 @@ export default function HoloDeskScene({ inputRef, cameraEnabled }: HoloDeskScene
   const [webglUnavailable, setWebglUnavailable] = useState(false);
   const [fallbackOffset, setFallbackOffset] = useState({ x: 0, y: 0 });
   const [fallbackRotation, setFallbackRotation] = useState(0);
+  const [motionPaused, setMotionPaused] = useState(false);
+  const motionPausedRef = useRef(false);
   const fallbackDragRef = useRef<{ x: number; y: number; originX: number; originY: number } | null>(null);
   cameraEnabledRef.current = cameraEnabled;
+  motionPausedRef.current = motionPaused;
 
   useEffect(() => {
     const host = hostRef.current;
@@ -233,18 +236,20 @@ export default function HoloDeskScene({ inputRef, cameraEnabled }: HoloDeskScene
 
       root.position.lerp(target, 1 - Math.exp(-delta * (displayedPinch ? 24 : 3.2)));
       const timeSeconds = time * 0.001;
-      root.rotation.y += delta * (displayedPinch ? 0.45 : 0.3);
-      root.rotation.x = Math.sin(timeSeconds * 0.65) * 0.12 + smoothedAngle * (displayedPinch ? 0.22 : 0.05);
-      core.rotation.y = -timeSeconds * 0.12;
-      innerCore.rotation.x = timeSeconds * 0.55;
-      innerCore.rotation.y = -timeSeconds * 0.75;
-      wire.rotation.copy(core.rotation);
-      ringOne.rotation.z = timeSeconds * 0.17;
-      ringTwo.rotation.z = -timeSeconds * 0.11;
-      particles.rotation.y = timeSeconds * 0.018;
-      particles.rotation.x = Math.sin(timeSeconds * 0.13) * 0.025;
+      if (!motionPausedRef.current) {
+        root.rotation.y += delta * (displayedPinch ? 0.45 : 0.3);
+        root.rotation.x = Math.sin(timeSeconds * 0.65) * 0.12 + smoothedAngle * (displayedPinch ? 0.22 : 0.05);
+        core.rotation.y = -timeSeconds * 0.12;
+        innerCore.rotation.x = timeSeconds * 0.55;
+        innerCore.rotation.y = -timeSeconds * 0.75;
+        wire.rotation.copy(core.rotation);
+        ringOne.rotation.z = timeSeconds * 0.17;
+        ringTwo.rotation.z = -timeSeconds * 0.11;
+        particles.rotation.y = timeSeconds * 0.018;
+        particles.rotation.x = Math.sin(timeSeconds * 0.13) * 0.025;
+      }
 
-      const pulse = 1 + Math.sin(timeSeconds * 2.3) * 0.016;
+      const pulse = motionPausedRef.current ? 1 : 1 + Math.sin(timeSeconds * 2.3) * 0.016;
       root.scale.setScalar(pulse * (displayedPinch ? 1.06 : 1));
       try {
         renderer.render(scene, camera);
