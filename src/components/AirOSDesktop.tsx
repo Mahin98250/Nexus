@@ -41,7 +41,6 @@ export default function AirOSDesktop({ inputRef, cameraEnabled, onSwitchExperien
   const gestureActivationGateRef = useRef(new GestureActivationGate());
   const lastGesturePositionRef = useRef({ x: Number.NaN, y: Number.NaN });
   const smoothedHandPositionRef = useRef(new AirHandCursorSmoother());
-  const handWasDetectedRef = useRef(false);
   const cameraRef = useRef(cameraEnabled);
   const windowsRef = useRef(initialWindows);
   const topZRef = useRef(5);
@@ -320,14 +319,11 @@ export default function AirOSDesktop({ inputRef, cameraEnabled, onSwitchExperien
       const detected = Boolean(hand?.detected);
       const gestureClickStarted = gestureActivationGateRef.current.update(detected, Boolean(detected && hand?.pinch));
       cursor.style.visibility = detected ? 'visible' : 'hidden';
-      if (!detected) handWasDetectedRef.current = false;
       if (!detected && hoveredTargetRef.current) {
         hoveredTargetRef.current.classList.remove('air-hand-hover');
         hoveredTargetRef.current = null;
       }
       if (detected && hand) {
-        if (!handWasDetectedRef.current) smoothedHandPositionRef.current.reset(hand.x, hand.y);
-        handWasDetectedRef.current = true;
         const smooth = smoothedHandPositionRef.current.update(hand.x, hand.y, performance.now());
         cursor.style.left = (smooth.x * 100) + '%';
         cursor.style.top = (smooth.y * 100) + '%';
