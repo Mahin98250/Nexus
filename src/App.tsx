@@ -4,7 +4,7 @@ import {
   Hand, HeartPulse, Layers3, Maximize2, Monitor, Move3D, Play, ScanLine,
   Settings2, ShieldCheck, Sparkles, Target, X, Sun, Moon,
 } from 'lucide-react';
-import type { HandLandmarker, PoseLandmarker } from '@mediapipe/tasks-vision';
+import type { GestureRecognizer, HandLandmarker, PoseLandmarker } from '@mediapipe/tasks-vision';
 import ShadowStrikeGame from './components/ShadowStrikeGame';
 import AirOSDesktop from './components/AirOSDesktop';
 import RealityScanOverlay from './components/RealityScanOverlay';
@@ -95,6 +95,10 @@ const handModelCandidates = [
   'https://github.com/sanderdesnaijer/mediapipe-model-mirrors/releases/download/v1/hand_landmarker.task',
 ];
 
+const gestureModelCandidates = [
+  'https://storage.googleapis.com/mediapipe-models/gesture_recognizer/gesture_recognizer/float16/1/gesture_recognizer.task',
+];
+
 const poseModelCandidates = [
   'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task',
 ];
@@ -130,6 +134,7 @@ export default function App() {
   const calibrationSamplesRef = useRef(0);
   const bodyInputRef = useRef<BodyInput>({ ...EMPTY_BODY_INPUT });
   const videoRef = useRef<HTMLVideoElement>(null);
+  const gestureRecognizerRef = useRef<GestureRecognizer | null>(null);
   const gestureStabilizerRef = useRef(new AirHandGestureStabilizer(65));
   const landmarkerRef = useRef<HandLandmarker | null>(null);
   const lastHandCountRef = useRef(-1);
@@ -296,6 +301,8 @@ export default function App() {
     setCameraStarting(false);
     if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
     frameRef.current = null;
+    gestureRecognizerRef.current?.close();
+    gestureRecognizerRef.current = null;
     gestureStabilizerRef.current.reset();
     landmarkerRef.current?.close();
     landmarkerRef.current = null;
