@@ -883,6 +883,13 @@ export default function App() {
               <button className={'experience-card ' + experience.accent} key={experience.id} onClick={() => openExperience(experience.id)}>
                 <div className="card-top"><span className="card-number">{experience.number} / NEXUS</span><span className="card-arrow"><ArrowRight size={17} /></span></div>
                 <div className="card-visual">
+                  <div className="experience-glyph" aria-hidden="true">
+                    {experience.id === 'holodesk' && <Move3D size={48} strokeWidth={1.1} />}
+                    {experience.id === 'shadowstrike' && <Target size={48} strokeWidth={1.1} />}
+                    {experience.id === 'airos' && <Monitor size={48} strokeWidth={1.1} />}
+                    {experience.id === 'realityscan' && <ScanLine size={48} strokeWidth={1.1} />}
+                    {experience.id === 'biometrics' && <HeartPulse size={48} strokeWidth={1.1} />}
+                  </div>
                   {experience.id === 'holodesk' && <div className="visual-holo"><div className="holo-orbit holo-one" /><div className="holo-orbit holo-two" /><div className="holo-cube"><div className="cube-face cube-front" /><div className="cube-face cube-back" /><div className="cube-face cube-left" /><div className="cube-face cube-right" /><div className="cube-face cube-top" /><div className="cube-face cube-bottom" /></div><div className="holo-dot dot-one" /><div className="holo-dot dot-two" /><div className="holo-dot dot-three" /></div>}
                   {experience.id === 'shadowstrike' && <div className="visual-game"><div className="game-grid" /><div className="game-target target-one" /><div className="game-target target-two" /><div className="game-target target-three" /><div className="game-player"><div className="player-head" /><div className="player-body" /><div className="player-arm arm-left" /><div className="player-arm arm-right" /><div className="player-leg leg-left" /><div className="player-leg leg-right" /></div><div className="game-score">SCORE <b>00840</b></div></div>}
                   {experience.id === 'airos' && <div className="visual-os"><div className="os-window os-window-back"><span /><span /><span /></div><div className="os-window os-window-front"><div className="os-title"><i /><i /><i /></div><div className="os-lines"><span /><span /><span /><span /></div><div className="os-widget"><Monitor size={17} /><span>Gesture<br />workspace</span></div></div><div className="os-cursor"><Move3D size={18} /></div></div>}
