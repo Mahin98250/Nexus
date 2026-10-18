@@ -13,6 +13,7 @@ export default function HoloDeskScene({ inputRef, cameraEnabled }: HoloDeskScene
   const [webglUnavailable, setWebglUnavailable] = useState(false);
   const [fallbackOffset, setFallbackOffset] = useState({ x: 0, y: 0 });
   const [fallbackRotation, setFallbackRotation] = useState(0);
+  const [handStatus, setHandStatus] = useState<'camera-off' | 'searching' | 'ready' | 'pinching'>('camera-off');
   const fallbackDragRef = useRef<{ x: number; y: number; originX: number; originY: number } | null>(null);
   cameraEnabledRef.current = cameraEnabled;
 
@@ -149,6 +150,8 @@ export default function HoloDeskScene({ inputRef, cameraEnabled }: HoloDeskScene
     let smoothedHandY = 0.5;
     let hasSmoothedHand = false;
     let lastHandSampleAt = 0;
+    let lastStatusUpdateAt = 0;
+    let previousHandStatus = '';
 
     const setPointerTarget = (event: PointerEvent) => {
       const rect = renderer.domElement.getBoundingClientRect();
@@ -188,6 +191,14 @@ export default function HoloDeskScene({ inputRef, cameraEnabled }: HoloDeskScene
       lastTime = time;
 
       const input = inputRef.current;
+      if (time - lastStatusUpdateAt >= 220) {
+        lastStatusUpdateAt = time;
+        const status = !cameraEnabledRef.current ? 'camera-off' : !input.detected ? 'searching' : input.pinch ? 'pinching' : 'ready';
+        if (status !== previousHandStatus) {
+          previousHandStatus = status;
+          setHandStatus(status);
+        }
+      }
       if (cameraEnabledRef.current && input.detected && input.pinch) {
         // Adaptive low-pass: suppress fingertip jitter when steady, but reduce
         // lag automatically when the hand moves quickly (AirHand-style response).
@@ -323,7 +334,7 @@ export default function HoloDeskScene({ inputRef, cameraEnabled }: HoloDeskScene
           <p>LIGHTWEIGHT HOLOGRAM · DRAG TO MOVE</p>
         </div>
       )}
-      <div className="holo-scene-hud"><span className={cameraEnabled ? 'status-dot active' : 'status-dot'} /> {cameraEnabled ? 'PINCH TO GRAB' : 'DRAG TO INTERACT'}</div>
+      <div className="holo-scene-hud" role="status" aria-live="polite"><span className={handStatus === 'camera-off' ? 'status-dot' : handStatus === 'searching' ? 'status-dot searching' : 'status-dot active'} /> {handStatus === 'camera-off' ? 'DRAG TO INTERACT' : handStatus === 'searching' ? 'LOOKING FOR HAND · KEEP IT IN FRAME' : handStatus === 'pinching' ? 'PINCH DETECTED · MOVING OBJECT' : 'HAND READY · PINCH TO GRAB'}</div>
       <div className="holo-scene-footnote">NEXUS SPATIAL ENGINE <span>·</span> {webglUnavailable ? 'FALLBACK SCENE' : 'LIVE SCENE'}</div>
     </div>
   );

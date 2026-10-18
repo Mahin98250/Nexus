@@ -1,0 +1,132 @@
+/* AirOS immersive desktop: use the browser's fullscreen top layer to escape the Nexus preview frame. */
+.air-os-layer:fullscreen,
+.air-os-layer:-webkit-full-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  max-height: none;
+  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+  background: #070914;
+  isolation: isolate;
+}
+.air-os-layer:fullscreen .air-os-wallpaper,
+.air-os-layer:-webkit-full-screen .air-os-wallpaper {
+  position: absolute;
+  inset: 0;
+}
+.air-os-layer:fullscreen .air-os-menubar,
+.air-os-layer:-webkit-full-screen .air-os-menubar {
+  height: 54px;
+  padding-left: clamp(20px, 3vw, 48px);
+  padding-right: clamp(20px, 3vw, 48px);
+  backdrop-filter: blur(26px);
+}
+.air-os-layer:fullscreen .air-os-date,
+.air-os-layer:-webkit-full-screen .air-os-date {
+  top: 84px;
+  right: clamp(28px, 4vw, 64px);
+}
+.air-os-layer:fullscreen .air-os-dock,
+.air-os-layer:-webkit-full-screen .air-os-dock {
+  bottom: clamp(18px, 3vh, 34px);
+  gap: 9px;
+  padding: 10px 13px;
+  border-radius: 21px;
+}
+.air-os-layer:fullscreen .dock-app,
+.air-os-layer:-webkit-full-screen .dock-app {
+  width: 48px;
+  height: 48px;
+}
+.air-os-layer:fullscreen .dock-app svg,
+.air-os-layer:-webkit-full-screen .dock-app svg {
+  width: 21px;
+  height: 21px;
+}
+.air-os-layer:fullscreen .air-os-help,
+.air-os-layer:-webkit-full-screen .air-os-help {
+  top: 68px;
+  left: clamp(20px, 3vw, 48px);
+}
+.air-os-layer:fullscreen .air-window,
+.air-os-layer:-webkit-full-screen .air-window {
+  width: min(46vw, 760px);
+  min-width: 330px;
+  max-height: calc(100% - 150px);
+}
+.air-os-layer:fullscreen .air-window-maximized,
+.air-os-layer:-webkit-full-screen .air-window-maximized {
+  left: 24px !important;
+  top: 66px !important;
+  width: calc(100% - 48px) !important;
+  height: calc(100% - 150px) !important;
+}
+.air-os-fullscreen-toggle {
+  display: inline-grid;
+  place-items: center;
+  width: 29px;
+  height: 29px;
+  margin-left: 5px;
+  border: 1px solid rgba(190, 198, 255, .2);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, .055);
+  color: inherit;
+  transition: background .18s ease, border-color .18s ease, transform .18s ease;
+}
+.air-os-fullscreen-toggle:hover {
+  background: rgba(140, 128, 255, .2);
+  border-color: rgba(178, 166, 255, .55);
+  transform: translateY(-1px);
+}
+.air-os-layer.light .air-os-fullscreen-toggle {
+  border-color: rgba(57, 69, 112, .2);
+  background: rgba(255, 255, 255, .24);
+}
+@media (max-width: 700px) {
+  .air-os-layer:fullscreen .air-os-menubar,
+  .air-os-layer:-webkit-full-screen .air-os-menubar {
+    height: 44px;
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+  .air-os-layer:fullscreen .air-os-date,
+  .air-os-layer:-webkit-full-screen .air-os-date {
+    top: 56px;
+    right: 14px;
+  }
+  .air-os-layer:fullscreen .air-window,
+  .air-os-layer:-webkit-full-screen .air-window {
+    left: 2% !important;
+    width: 96%;
+    min-width: 0;
+    max-width: 600px;
+    max-height: calc(100% - 120px);
+  }
+  .air-os-layer:fullscreen .air-window-maximized,
+  .air-os-layer:-webkit-full-screen .air-window-maximized {
+    left: 8px !important;
+    top: 50px !important;
+    width: calc(100% - 16px) !important;
+    height: calc(100% - 112px) !important;
+  }
+  .air-os-layer:fullscreen .air-os-dock,
+  .air-os-layer:-webkit-full-screen .air-os-dock {
+    bottom: 10px;
+    gap: 4px;
+    padding: 7px;
+  }
+  .air-os-layer:fullscreen .dock-app,
+  .air-os-layer:-webkit-full-screen .dock-app {
+    width: 38px;
+    height: 38px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .air-os-fullscreen-toggle { transition: none; }
+}

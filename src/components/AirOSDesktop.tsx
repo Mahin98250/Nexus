@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import {
   BatteryFull, ChevronDown, Palette, Command, FileText, Globe2, Minus,
-  Music2, Search, ShieldCheck, TerminalSquare, Wifi, X, Maximize2, Minimize2, RotateCcw, CircleHelp, Move3D, Target, ScanLine, House,
+  Music2, Search, ShieldCheck, TerminalSquare, Wifi, X, Maximize2, Minimize2, RotateCcw, CircleHelp, Move3D, Target, ScanLine, House, PanelsTopLeft,
 } from 'lucide-react';
 import type { HandInputRef } from '../vision/types';
 import { AirHandCursorSmoother } from '../vision/airHandEngine';
 import { GestureActivationGate } from '../vision/gestureNavigation';
+import '../airos-fullscreen.css';
 
 type WindowId = 'browser' | 'notes' | 'terminal' | 'music';
 type NexusModeId = 'home' | 'holodesk' | 'shadowstrike' | 'airos' | 'realityscan';
@@ -82,6 +83,9 @@ export default function AirOSDesktop({ inputRef, cameraEnabled, onSwitchExperien
   const [terminalOutput, setTerminalOutput] = useState<string[]>(['NEXUS TERMINAL 0.1', 'Type help to see demo commands.']);
   const [playing, setPlaying] = useState(false);
   const [clock, setClock] = useState(() => new Date());
+  const [fullscreenActive, setFullscreenActive] = useState(false);
+  const [desktopCleared, setDesktopCleared] = useState(false);
+  const preDesktopWindowsRef = useRef<AirWindow[] | null>(null);
   const [maximizedWindow, setMaximizedWindow] = useState<WindowId | null>(null);
   const [showLauncher, setShowLauncher] = useState(false);
   const hoveredTargetRef = useRef<HTMLElement | null>(null);
@@ -259,6 +263,10 @@ export default function AirOSDesktop({ inputRef, cameraEnabled, onSwitchExperien
         setKeyboardTarget(null);
         return;
       }
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'd') {
+        event.preventDefault();
+        toggleShowDesktop();
+      }
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
         event.preventDefault();
         setShowLauncher((value) => !value);
@@ -272,7 +280,7 @@ export default function AirOSDesktop({ inputRef, cameraEnabled, onSwitchExperien
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, []);
+  }, [desktopCleared, windows]);
 
   useEffect(() => {
     const interval = window.setInterval(() => setClock(new Date()), 15000);
@@ -388,6 +396,40 @@ export default function AirOSDesktop({ inputRef, cameraEnabled, onSwitchExperien
     if (audioContextRef.current && audioContextRef.current.state !== 'closed') void audioContextRef.current.close();
   }, []);
 
+  useEffect(() => {
+    const syncFullscreen = () => setFullscreenActive(document.fullscreenElement === hostRef.current);
+    document.addEventListener('fullscreenchange', syncFullscreen);
+    return () => document.removeEventListener('fullscreenchange', syncFullscreen);
+  }, []);
+
+  const toggleFullscreen = async () => {
+    const host = hostRef.current;
+    if (!host) return;
+    try {
+      if (document.fullscreenElement === host) {
+        await document.exitFullscreen();
+      } else if (host.requestFullscreen) {
+        await host.requestFullscreen();
+      }
+    } catch {
+      // Browsers can deny fullscreen outside a direct user gesture or in embedded contexts.
+      setFullscreenActive(document.fullscreenElement === host);
+    }
+  };
+
+  const toggleShowDesktop = () => {
+    if (desktopCleared && preDesktopWindowsRef.current) {
+      setWindows(preDesktopWindowsRef.current);
+      preDesktopWindowsRef.current = null;
+      setDesktopCleared(false);
+      return;
+    }
+    preDesktopWindowsRef.current = windows.map((item) => ({ ...item }));
+    setWindows((current) => current.map((item) => ({ ...item, minimized: !item.closed })));
+    setMaximizedWindow(null);
+    setDesktopCleared(true);
+  };
+
   const activeWindows = windows.filter((item) => !item.closed && !item.minimized);
 
   return (
@@ -396,7 +438,7 @@ export default function AirOSDesktop({ inputRef, cameraEnabled, onSwitchExperien
       <div className="air-os-menubar">
         <span className="air-os-logo"><Command size={14} /> NEXUS</span>
         <span className="air-os-activeapp"><ChevronDown size={12} /> Workspace</span>
-        <span className="air-os-menuright"><ShieldCheck size={13} /> LOCAL SESSION <Wifi size={13} /><BatteryFull size={15} /></span>
+        <span className="air-os-menuright"><ShieldCheck size={13} /> LOCAL SESSION <Wifi size={13} /><BatteryFull size={15} /><button className="air-os-fullscreen-toggle" onClick={() => void toggleFullscreen()} aria-label={fullscreenActive ? "Exit AirOS fullscreen" : "Enter AirOS fullscreen"} title={fullscreenActive ? "Exit fullscreen (Esc)" : "Enter fullscreen"}>{fullscreenActive ? <Minimize2 size={14} /> : <Maximize2 size={14} />}</button></span>
       </div>
       <div className="air-os-date"><strong>{clock.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</strong><span>{clock.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}</span></div>
 
@@ -427,7 +469,7 @@ export default function AirOSDesktop({ inputRef, cameraEnabled, onSwitchExperien
       })}
 
       <button className="air-os-help" onClick={() => setShowGestureGuide((value) => !value)} aria-label="Open gesture manual" title="Gesture manual"><CircleHelp size={17} /><span>Gesture guide</span></button>
-      {showGestureGuide && <section className="air-gesture-guide" role="dialog" aria-label="AirOS gesture manual"><header><div><span>QUICK START</span><h3>Control AirOS with your hand</h3></div><button onClick={() => setShowGestureGuide(false)} aria-label="Close gesture manual"><X size={17} /></button></header><p>Keep your hand fully visible in the camera preview. Move slowly at first; tracking needs good light and a clear background.</p><div className="air-gesture-list"><article><b className="gesture-symbol">✋</b><div><strong>Move cursor</strong><small>Move your hand around the camera view. The cursor follows your index fingertip.</small></div></article><article><b className="gesture-symbol">🤏</b><div><strong>Grab and move a window</strong><small>Place the cursor over a window title, pinch thumb and index finger together, move, then release.</small></div></article><article><b className="gesture-symbol">☝️</b><div><strong>Choose an app</strong><small>Pinch any highlighted button to activate it, including dock, window controls, launcher, experience switching, and Nexus Home.</small></div></article><article><b className="gesture-symbol">✊</b><div><strong>Release / pause</strong><small>Release the pinch to drop a window. Pinch a text field to open the gesture keyboard; use 123 for punctuation and digits.</small></div></article></div><div className="air-guide-shortcuts"><strong>QUICK SHORTCUTS</strong><span><kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>K</kbd> <i>App launcher</i></span><span><kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>Shift</kbd> + <kbd>R</kbd> <i>Reset layout</i></span><span><kbd>Esc</kbd> <i>Close guide / restore window</i></span><small>The sun/moon control in the Nexus top bar and AirOS dock changes the app-wide theme.</small></div><footer><ShieldCheck size={13} /> Camera processing runs in this browser · ESC closes this guide</footer></section>}
+      {showGestureGuide && <section className="air-gesture-guide" role="dialog" aria-label="AirOS gesture manual"><header><div><span>QUICK START</span><h3>Control AirOS with your hand</h3></div><button onClick={() => setShowGestureGuide(false)} aria-label="Close gesture manual"><X size={17} /></button></header><p>Keep your hand fully visible in the camera preview. Move slowly at first; tracking needs good light and a clear background.</p><div className="air-gesture-list"><article><b className="gesture-symbol">✋</b><div><strong>Move cursor</strong><small>Move your hand around the camera view. The cursor follows your index fingertip.</small></div></article><article><b className="gesture-symbol">🤏</b><div><strong>Grab and move a window</strong><small>Place the cursor over a window title, pinch thumb and index finger together, move, then release.</small></div></article><article><b className="gesture-symbol">☝️</b><div><strong>Choose an app</strong><small>Pinch any highlighted button to activate it, including dock, window controls, launcher, experience switching, and Nexus Home.</small></div></article><article><b className="gesture-symbol">✊</b><div><strong>Release / pause</strong><small>Release the pinch to drop a window. Pinch a text field to open the gesture keyboard; use 123 for punctuation and digits.</small></div></article></div><div className="air-guide-shortcuts"><strong>QUICK SHORTCUTS</strong><span><kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>K</kbd> <i>App launcher</i></span><span><kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>D</kbd> <i>Show / restore desktop</i></span><span><kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>Shift</kbd> + <kbd>R</kbd> <i>Reset layout</i></span><span><kbd>Esc</kbd> <i>Close guide / restore window</i></span><small>The sun/moon control in the Nexus top bar and AirOS dock changes the app-wide theme.</small></div><footer><ShieldCheck size={13} /> Camera processing runs in this browser · ESC closes this guide</footer></section>}
       <div className="air-os-dock">
         {(Object.keys(titles) as WindowId[]).map((id) => {
           const Icon = icons[id];
@@ -437,6 +479,7 @@ export default function AirOSDesktop({ inputRef, cameraEnabled, onSwitchExperien
         })}
         <span className="dock-divider" />
         <button className="dock-app" onClick={() => setShowLauncher((value) => !value)} aria-label="Open app launcher" title="App launcher"><Command size={18} /><i /></button>
+        <button className={desktopCleared ? 'dock-app dock-app-open' : 'dock-app'} onClick={toggleShowDesktop} aria-label={desktopCleared ? 'Restore desktop windows' : 'Show desktop'} title={desktopCleared ? 'Restore windows (Ctrl/⌘+D)' : 'Show desktop (Ctrl/⌘+D)'}><PanelsTopLeft size={18} /><i /></button>
         <button className="dock-app dock-settings" onClick={onToggleTheme} aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'} title={theme === 'dark' ? 'Light mode' : 'Dark mode'}><Palette size={18} /><i /></button>
         <button className="dock-app" onClick={() => { setMaximizedWindow(null); setWindows(initialWindows); }} aria-label="Reset workspace layout" title="Reset layout"><RotateCcw size={17} /><i /></button>
       </div>

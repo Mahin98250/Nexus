@@ -114,6 +114,7 @@ export default function App() {
   const globalHoveredElementRef = useRef<HTMLElement | null>(null);
   const globalGestureActivationGateRef = useRef(new GestureActivationGate());
   const globalCursorSmootherRef = useRef(new AirHandCursorSmoother());
+  const handScrollRef = useRef<{ active: boolean; lastY: number; lastAt: number }>({ active: false, lastY: 0.5, lastAt: 0 });
   const cursorCalibratorRef = useRef<AirHandCursorCalibrator | null>(null);
   const calibratingCursorRef = useRef(false);
   const cursorBoundsRef = useRef<AirHandCursorBounds | null>(null);
@@ -164,6 +165,22 @@ export default function App() {
       globalHoveredElementRef.current?.classList.remove('global-gesture-hover');
       globalHoveredElementRef.current = null;
     };
+    const scrollAtPoint = (x: number, y: number, delta: number) => {
+      if (!Number.isFinite(delta) || Math.abs(delta) < 1) return;
+      const hit = document.elementFromPoint(x * window.innerWidth, y * window.innerHeight) as HTMLElement | null;
+      let node: HTMLElement | null = hit;
+      while (node && node !== document.body && node !== document.documentElement) {
+        const style = window.getComputedStyle(node);
+        const canScroll = /(auto|scroll)/.test(style.overflowY) && node.scrollHeight > node.clientHeight + 2;
+        if (canScroll) {
+          const before = node.scrollTop;
+          node.scrollTop += delta;
+          if (node.scrollTop !== before) return;
+        }
+        node = node.parentElement;
+      }
+      window.scrollBy({ top: delta, behavior: 'auto' });
+    };
     const tick = () => {
       const hand = handInputRef.current;
       // AirOS owns its internal cursor and window gestures. ShadowStrike uses
@@ -174,10 +191,15 @@ export default function App() {
         cursor.classList.remove('global-gesture-pinching');
         clearHover();
         globalGestureActivationGateRef.current.reset();
+        handScrollRef.current.active = false;
+        frame = requestAnimationFrame(tick);
         return;
       }
-      const clickStarted = globalGestureActivationGateRef.current.update(hand.detected, hand.detected && hand.pinch);
+      const isScrollGesture = hand.detected && hand.gesture === 'Fist' && !hand.pinch;
+      const clickStarted = globalGestureActivationGateRef.current.update(hand.detected && !isScrollGesture, hand.detected && hand.pinch && !isScrollGesture);
       if (!hand.detected) {
+        handScrollRef.current.active = false;
+        cursor.classList.remove('global-gesture-scrolling');
         // Tracking loss hides interaction and disarms clicks until a visible release.
         // Do not let a held pinch accidentally activate again when the hand reappears.
         cursor.style.visibility = 'hidden';
@@ -194,6 +216,25 @@ export default function App() {
       const x = clampGesturePointer(smoothed.x);
       const y = clampGesturePointer(smoothed.y);
       const hit = document.elementFromPoint(x * window.innerWidth, y * window.innerHeight) as HTMLElement | null;
+      if (isScrollGesture) {
+        cursor.style.visibility = 'visible';
+        cursor.style.left = (x * 100) + 'vw';
+        cursor.style.top = (y * 100) + 'vh';
+        cursor.classList.remove('global-gesture-pinching');
+        cursor.classList.add('global-gesture-scrolling');
+        clearHover();
+        const scrollState = handScrollRef.current;
+        const now = performance.now();
+        if (scrollState.active && now - scrollState.lastAt < 120) {
+          const delta = (scrollState.lastY - y) * window.innerHeight * 1.35;
+          scrollAtPoint(x, y, delta);
+        }
+        handScrollRef.current = { active: true, lastY: y, lastAt: now };
+        frame = requestAnimationFrame(tick);
+        return;
+      }
+      handScrollRef.current.active = false;
+      cursor.classList.remove('global-gesture-scrolling');
       // AirOS draws its own low-latency cursor inside the desktop surface. Keep
       // that cursor exclusive there, but allow the global cursor to operate the
       // workspace toolbar and camera controls outside the desktop.
@@ -915,7 +956,7 @@ export default function App() {
       )}
 
       <div ref={globalGestureCursorRef} className="global-gesture-cursor" aria-hidden="true"><span /><i /></div>
-      {showHelp && <div className="modal-backdrop" role="presentation" onClick={() => setShowHelp(false)}><section className="help-modal" role="dialog" aria-modal="true" aria-labelledby="help-title" onClick={(event) => event.stopPropagation()}><button className="modal-close" onClick={() => setShowHelp(false)} aria-label="Close help"><X size={18} /></button><div className="modal-icon"><CircleHelp size={22} /></div><div className="eyebrow">QUICK GUIDE</div><h2 id="help-title">Welcome to Nexus.</h2><p>Nexus is an experimental playground for camera-based interaction. You can enable hands-free navigation directly from Home, or enter an experience first. Move your hand until the reticle highlights a control, pinch once to activate it, and release before the next click. The camera stays off until you opt in. Switch themes using the sun/moon button in the top bar.</p><div className="help-list"><div><Camera size={16} /><span><strong>Camera access</strong><small>Requested only when you press Enable camera. Use HTTPS or localhost.</small></span></div><div><ShieldCheck size={16} /><span><strong>Privacy</strong><small>Video is processed in your browser and is not uploaded by this app.</small></span></div><div><Maximize2 size={16} /><span><strong>Good tracking</strong><small>Use bright, even light and keep your hand fully visible.</small></span></div><div><Hand size={16} /><span><strong>Hands-free Home</strong><small>Enable hands-free in Home, then pinch a highlighted experience card to open it. Returning Home can keep your opted-in session active.</small></span></div><div><Hand size={16} /><span><strong>HoloDesk & AirOS</strong><small>In HoloDesk and RealityScan, move your hand to move the on-screen reticle; a highlighted button can be activated with one pinch. In HoloDesk, pinch over the hologram to grab it. In AirOS, pinch any highlighted button to activate it or pinch and hold a window title to move the window. Release fully before the next click.</small></span></div><div><Target size={16} /><span><strong>ShadowStrike</strong><small>Move your body to steer, raise a hand to strike, and jump to dodge. Keep your full body in view.</small></span></div><div><ScanLine size={16} /><span><strong>RealityScan Live</strong><small>Point the camera at everyday objects. Use the hand reticle to pinch visible Nexus controls; the object detector itself labels items in the camera view.</small></span></div></div><button className="button button-primary modal-done" onClick={() => setShowHelp(false)}>Got it <Check size={16} /></button></section></div>}
+      {showHelp && <div className="modal-backdrop" role="presentation" onClick={() => setShowHelp(false)}><section className="help-modal" role="dialog" aria-modal="true" aria-labelledby="help-title" onClick={(event) => event.stopPropagation()}><button className="modal-close" onClick={() => setShowHelp(false)} aria-label="Close help"><X size={18} /></button><div className="modal-icon"><CircleHelp size={22} /></div><div className="eyebrow">QUICK GUIDE</div><h2 id="help-title">Welcome to Nexus.</h2><p>Nexus is an experimental playground for camera-based interaction. You can enable hands-free navigation directly from Home, or enter an experience first. Move your hand until the reticle highlights a control, pinch once to activate it, and release before the next click. The camera stays off until you opt in. Switch themes using the sun/moon button in the top bar.</p><div className="help-list"><div><Camera size={16} /><span><strong>Camera access</strong><small>Requested only when you press Enable camera. Use HTTPS or localhost.</small></span></div><div><ShieldCheck size={16} /><span><strong>Privacy</strong><small>Video is processed in your browser and is not uploaded by this app.</small></span></div><div><Maximize2 size={16} /><span><strong>Good tracking</strong><small>Use bright, even light and keep your hand fully visible.</small></span></div><div><Move3D size={16} /><span><strong>Scroll the whole app</strong><small>Make a fist and move your hand up or down to scroll the page or the scrollable panel under your cursor. Open your hand to stop scrolling; pinch still activates controls.</small></span></div><div><Hand size={16} /><span><strong>Hands-free Home</strong><small>Enable hands-free in Home, then pinch a highlighted experience card to open it. Returning Home can keep your opted-in session active.</small></span></div><div><Hand size={16} /><span><strong>HoloDesk & AirOS</strong><small>In HoloDesk and RealityScan, move your hand to move the on-screen reticle; a highlighted button can be activated with one pinch. In HoloDesk, pinch over the hologram to grab it. In AirOS, pinch any highlighted button to activate it or pinch and hold a window title to move the window. Release fully before the next click.</small></span></div><div><Target size={16} /><span><strong>ShadowStrike</strong><small>Move your body to steer, raise a hand to strike, and jump to dodge. Keep your full body in view.</small></span></div><div><ScanLine size={16} /><span><strong>RealityScan Live</strong><small>Point the camera at everyday objects. Use the hand reticle to pinch visible Nexus controls; the object detector itself labels items in the camera view.</small></span></div></div><button className="button button-primary modal-done" onClick={() => setShowHelp(false)}>Got it <Check size={16} /></button></section></div>}
     </main>
   );
 }

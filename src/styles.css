@@ -33,7 +33,7 @@
 .holo-canvas{position:absolute;inset:0;display:block;width:100%;height:100%;pointer-events:auto;touch-action:none;cursor:grab;outline:none}image-rendering:auto;
 .holo-canvas:active{cursor:grabbing}
 .holo-scene-hud,.holo-scene-footnote{position:absolute;z-index:4;display:flex;align-items:center;gap:7px;padding:8px 10px;border:1px solid rgba(171,160,255,.23);border-radius:6px;background:rgba(8,10,18,.66);backdrop-filter:blur(10px);font:8px var(--mono);letter-spacing:1px;color:#b8b2e8;pointer-events:none}
-.holo-scene-hud{top:14px;left:14px}
+.holo-scene-hud{top:14px;left:14px}.holo-scene-hud .status-dot.searching{background:#f5c76b;box-shadow:0 0 0 3px rgba(245,199,107,.12);animation:holo-status-pulse 1.3s ease-in-out infinite}@keyframes holo-status-pulse{50%{opacity:.45}}
 .holo-scene-footnote{bottom:14px;right:14px;color:#858ca6;border-color:rgba(171,160,255,.13);font-size:7px}
 .holo-scene-footnote span{color:#83e2d2}
 .holo-scene-unavailable:after{content:'3D graphics are not available in this browser.';position:absolute;left:16px;right:16px;top:50%;text-align:center;font-size:11px;line-height:1.7;color:#c1bddf}
@@ -271,6 +271,9 @@
 .global-gesture-cursor{position:fixed;z-index:90;left:50vw;top:50vh;width:27px;height:27px;transform:translate(-50%,-50%);pointer-events:none;visibility:hidden;border:1.5px solid rgba(128,242,218,.96);border-radius:50%;background:rgba(80,218,192,.07);box-shadow:0 0 0 5px rgba(80,218,192,.09),0 0 22px rgba(80,218,192,.5);transition:width .1s,height .1s,border-color .1s,box-shadow .1s}
 .global-gesture-cursor>span{position:absolute;left:50%;top:50%;width:4px;height:4px;transform:translate(-50%,-50%);border-radius:50%;background:#d8fff5;box-shadow:0 0 9px rgba(128,242,218,.9)}
 .global-gesture-cursor>i{position:absolute;inset:-5px;border:1px dashed rgba(128,242,218,.6);border-radius:50%;animation:global-gesture-orbit 7s linear infinite}
+.global-gesture-scrolling{width:31px;height:31px;border-color:#f5c76b;background:rgba(245,199,107,.13);box-shadow:0 0 0 6px rgba(245,199,107,.14),0 0 24px rgba(245,199,107,.65)}
+.global-gesture-scrolling>span{background:#fff0c2}
+.global-gesture-scrolling>i{border-color:rgba(245,199,107,.85);inset:-7px}
 .global-gesture-pinching{width:18px;height:18px;border-color:#b8adff;background:rgba(154,139,255,.18);box-shadow:0 0 0 5px rgba(154,139,255,.15),0 0 24px rgba(154,139,255,.7)}
 .global-gesture-pinching>span{background:#f2edff}
 .global-gesture-pinching>i{border-color:rgba(184,173,255,.8);inset:-3px}
