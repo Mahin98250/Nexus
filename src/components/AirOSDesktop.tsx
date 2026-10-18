@@ -6,6 +6,7 @@ import {
 import type { HandInputRef } from '../vision/types';
 import { AirHandCursorSmoother } from '../vision/airHandEngine';
 import { GestureActivationGate } from '../vision/gestureNavigation';
+import '../airos-fullscreen.css';
 
 type WindowId = 'browser' | 'notes' | 'terminal' | 'music';
 type NexusModeId = 'home' | 'holodesk' | 'shadowstrike' | 'airos' | 'realityscan';
@@ -82,6 +83,7 @@ export default function AirOSDesktop({ inputRef, cameraEnabled, onSwitchExperien
   const [terminalOutput, setTerminalOutput] = useState<string[]>(['NEXUS TERMINAL 0.1', 'Type help to see demo commands.']);
   const [playing, setPlaying] = useState(false);
   const [clock, setClock] = useState(() => new Date());
+  const [fullscreenActive, setFullscreenActive] = useState(false);
   const [maximizedWindow, setMaximizedWindow] = useState<WindowId | null>(null);
   const [showLauncher, setShowLauncher] = useState(false);
   const hoveredTargetRef = useRef<HTMLElement | null>(null);
@@ -388,6 +390,27 @@ export default function AirOSDesktop({ inputRef, cameraEnabled, onSwitchExperien
     if (audioContextRef.current && audioContextRef.current.state !== 'closed') void audioContextRef.current.close();
   }, []);
 
+  useEffect(() => {
+    const syncFullscreen = () => setFullscreenActive(document.fullscreenElement === hostRef.current);
+    document.addEventListener('fullscreenchange', syncFullscreen);
+    return () => document.removeEventListener('fullscreenchange', syncFullscreen);
+  }, []);
+
+  const toggleFullscreen = async () => {
+    const host = hostRef.current;
+    if (!host) return;
+    try {
+      if (document.fullscreenElement === host) {
+        await document.exitFullscreen();
+      } else if (host.requestFullscreen) {
+        await host.requestFullscreen();
+      }
+    } catch {
+      // Browsers can deny fullscreen outside a direct user gesture or in embedded contexts.
+      setFullscreenActive(document.fullscreenElement === host);
+    }
+  };
+
   const activeWindows = windows.filter((item) => !item.closed && !item.minimized);
 
   return (
@@ -396,7 +419,7 @@ export default function AirOSDesktop({ inputRef, cameraEnabled, onSwitchExperien
       <div className="air-os-menubar">
         <span className="air-os-logo"><Command size={14} /> NEXUS</span>
         <span className="air-os-activeapp"><ChevronDown size={12} /> Workspace</span>
-        <span className="air-os-menuright"><ShieldCheck size={13} /> LOCAL SESSION <Wifi size={13} /><BatteryFull size={15} /></span>
+        <span className="air-os-menuright"><ShieldCheck size={13} /> LOCAL SESSION <Wifi size={13} /><BatteryFull size={15} /><button className="air-os-fullscreen-toggle" onClick={() => void toggleFullscreen()} aria-label={fullscreenActive ? "Exit AirOS fullscreen" : "Enter AirOS fullscreen"} title={fullscreenActive ? "Exit fullscreen (Esc)" : "Enter fullscreen"}>{fullscreenActive ? <Minimize2 size={14} /> : <Maximize2 size={14} />}</button></span>
       </div>
       <div className="air-os-date"><strong>{clock.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</strong><span>{clock.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}</span></div>
 
