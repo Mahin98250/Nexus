@@ -89,7 +89,7 @@ const visionWasmCandidates = [
 ];
 // Some mobile networks can load the camera but block or interrupt Google Cloud Storage.
 // Keep a second model mirror so camera permission success is not mistaken for model success.
-const localHandModelPath = `${import.meta.env.BASE_URL}mediapipe/models/hand_landmarker.task`;
+const localHandModelPath = new URL('mediapipe/models/hand_landmarker.task', document.baseURI).toString();
 const handModelCandidates = [
   // BASE_URL resolves correctly for both Vite root hosting and GitHub Pages' /Nexus/ path.
   localHandModelPath,
