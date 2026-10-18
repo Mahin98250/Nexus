@@ -883,7 +883,7 @@ export default function App() {
                 {activeExperience.id === 'shadowstrike' && <ShadowStrikeGame bodyInputRef={bodyInputRef} cameraEnabled={cameraOn} />}
                 {activeExperience.id === 'airos' && <AirOSDesktop inputRef={handInputRef} cameraEnabled={cameraOn} onSwitchExperience={handleAirOSNavigation} theme={theme} onToggleTheme={() => setTheme((value) => value === 'dark' ? 'light' : 'dark')} />}
                 {activeExperience.id === 'realityscan' && <RealityScanOverlay active={cameraOn} videoRef={videoRef} onStatusChange={setCameraStatus} />}
-                {activeExperience.id === 'biometrics' && <BiometricsMonitor cameraEnabled={cameraOn} videoRef={videoRef} />}
+                {activeExperience.id === 'biometrics' && <BiometricsMonitor cameraEnabled={cameraOn} videoRef={videoRef} handInputRef={handInputRef} />}
               </div>
               <div className="camera-footer">
                 <span className="camera-status"><span className={cameraOn || cameraStarting ? 'status-dot active' : 'status-dot'} /> {cameraStatus}</span>
