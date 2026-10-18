@@ -328,8 +328,11 @@ export default function HoloDeskScene({ inputRef, cameraEnabled }: HoloDeskScene
           <p>LIGHTWEIGHT HOLOGRAM · DRAG TO MOVE</p>
         </div>
       )}
-      <div className="holo-scene-hud"><span className={cameraEnabled ? 'status-dot active' : 'status-dot'} /> {cameraEnabled ? 'PINCH TO GRAB' : 'DRAG TO INTERACT'}</div>
-      <div className="holo-scene-footnote">NEXUS SPATIAL ENGINE <span>·</span> {webglUnavailable ? 'FALLBACK SCENE' : 'LIVE SCENE'}</div>
+      <div className="holo-scene-hud"><span className={cameraEnabled ? 'status-dot active' : 'status-dot'} /> {cameraEnabled ? 'PINCH TO GRAB' : 'DRAG TO INTERACT'} <span className="holo-hud-divider">·</span> {motionPaused ? 'MOTION PAUSED' : 'MOTION LIVE'}</div>
+      <div className="holo-scene-controls" role="group" aria-label="HoloDesk scene controls">
+        <button type="button" onClick={() => setMotionPaused((paused) => !paused)} aria-pressed={motionPaused}>{motionPaused ? 'Resume motion' : 'Pause motion'}</button>
+      </div>
+      <div className="holo-scene-footnote">NEXUS SPATIAL ENGINE <span>·</span> {webglUnavailable ? 'FALLBACK SCENE' : 'LIVE SCENE'} <span>·</span> {motionPaused ? 'LOW MOTION' : 'REAL-TIME'}</div>
     </div>
   );
 }
