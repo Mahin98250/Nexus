@@ -85,7 +85,10 @@ export default function BiometricsMonitor({ cameraEnabled, videoRef, handInputRe
   const [signals, setSignals] = useState<Sample[]>([]);
   const [pulse, setPulse] = useState<PulseEstimate | null>(null);
   const [quality, setQuality] = useState<'waiting' | 'face-area' | 'lighting' | 'collecting' | 'low-fps' | 'ready'>('waiting');
-  const [signalLevel, setSignalLevel] = useState(0);\n  const [signalMetrics, setSignalMetrics] = useState<SignalMetrics>({ variability: null, stability: null, redMean: 0, greenMean: 0, blueMean: 0, sampleRate: 0, motion: 'low' });\n  const [showResearchPanel, setShowResearchPanel] = useState(true);\n  const [faceTracking, setFaceTracking] = useState<'native' | 'fallback' | 'unavailable'>('fallback');
+  const [signalLevel, setSignalLevel] = useState(0);
+  const [signalMetrics, setSignalMetrics] = useState<SignalMetrics>({ variability: null, stability: null, redMean: 0, greenMean: 0, blueMean: 0, sampleRate: 0, motion: 'low' });
+  const [showResearchPanel, setShowResearchPanel] = useState(true);
+  const [faceTracking, setFaceTracking] = useState<'native' | 'fallback' | 'unavailable'>('fallback');
   const [faceFrame, setFaceFrame] = useState({ x: 0.28, y: 0.14, width: 0.44, height: 0.58 });
   const [notes, setNotes] = useState('Sit still, face the camera, and use steady, bright light.');
   const [mode, setMode] = useState<'signals' | 'checkin'>('signals');
@@ -164,7 +167,8 @@ export default function BiometricsMonitor({ cameraEnabled, videoRef, handInputRe
     let detector: FaceDetectorLike | null = null;
     try {
       const Detector = (window as Window & { FaceDetector?: FaceDetectorConstructor }).FaceDetector;
-      if (Detector) { detector = new Detector({ fastMode: true, maxDetectedFaces: 1 }); setFaceTracking('native'); }\n      else setFaceTracking('fallback');
+      if (Detector) { detector = new Detector({ fastMode: true, maxDetectedFaces: 1 }); setFaceTracking('native'); }
+      else setFaceTracking('fallback');
     } catch { detector = null; setFaceTracking('fallback'); }
     let detectionInFlight = false;
     let frameCount = 0;
@@ -197,7 +201,10 @@ export default function BiometricsMonitor({ cameraEnabled, videoRef, handInputRe
           } else faceBox = null;
         }).catch(() => { detector = null; }).finally(() => { detectionInFlight = false; });
       }
-      if (frameCount % 8 === 0) {\n        setFaceFrame(faceBox ?? { x: 0.28, y: 0.14, width: 0.44, height: 0.58 });\n        if (detector && faceBox) setFaceTracking('native');\n      }
+      if (frameCount % 8 === 0) {
+        setFaceFrame(faceBox ?? { x: 0.28, y: 0.14, width: 0.44, height: 0.58 });
+        if (detector && faceBox) setFaceTracking('native');
+      }
 
       if (now - lastSampleAtRef.current < 75) return;
       lastSampleAtRef.current = now;
@@ -300,7 +307,22 @@ export default function BiometricsMonitor({ cameraEnabled, videoRef, handInputRe
             <p className="bio-disclaimer"><ShieldCheck size={14} /> Focus, mental load, and mood are your own check-ins. They stay in component memory and are not saved.</p>
           </section>
         </div>
-        <section className="bio-research-panel">\n          <button className="bio-research-toggle" aria-expanded={showResearchPanel} onClick={() => setShowResearchPanel((value) => !value)}><span><ScanFace size={16} /> ADVANCED SIGNAL ANALYSIS / RESEARCH VIEW</span><span>{showResearchPanel ? 'Hide details −' : 'Show details +'}</span></button>\n          {showResearchPanel && <div className="bio-research-content">\n            <p className="bio-explainer">Live descriptive features calculated from camera RGB samples. These are signal diagnostics, not an objective emotion, stress, or cognitive-load classifier.</p>\n            <div className="bio-research-grid">\n              <div><span>GREEN CHANNEL VARIABILITY</span><strong>{signalMetrics.variability === null ? '—' : signalMetrics.variability.toFixed(2)}</strong><small>Standard deviation · intensity units</small></div>\n              <div><span>SHORT-WINDOW STABILITY</span><strong>{signalMetrics.stability === null ? '—' : Math.round(signalMetrics.stability) + '%'}</strong><small>Heuristic signal-quality indicator</small></div>\n              <div><span>SAMPLE RATE</span><strong>{signalMetrics.sampleRate ? signalMetrics.sampleRate.toFixed(1) + ' Hz' : '—'}</strong><small>Actual camera sample timestamps</small></div>\n              <div><span>FACE / MOTION STATUS</span><strong>{signalMetrics.motion.toUpperCase()}</strong><small>{faceTracking === 'native' ? 'Browser FaceDetector available' : faceTracking === 'fallback' ? 'Center-region fallback; face not verified' : 'Face detection unavailable'}</small></div>\n            </div>\n            <div className="bio-rgb-strip"><span>MEAN RGB INTENSITY</span><div><i style={{ width: Math.min(100, signalMetrics.redMean / 255 * 100) + '%', background: '#f0808b' }} /><b>R {signalMetrics.redMean ? Math.round(signalMetrics.redMean) : '—'}</b></div><div><i style={{ width: Math.min(100, signalMetrics.greenMean / 255 * 100) + '%', background: '#78d6a4' }} /><b>G {signalMetrics.greenMean ? Math.round(signalMetrics.greenMean) : '—'}</b></div><div><i style={{ width: Math.min(100, signalMetrics.blueMean / 255 * 100) + '%', background: '#80aaff' }} /><b>B {signalMetrics.blueMean ? Math.round(signalMetrics.blueMean) : '—'}</b></div></div>\n            <div className="bio-method-note"><strong>Emotion / micro-expression module</strong><p>No facial emotion classifier is currently loaded. A future DeepFace/OpenFace service would need explicit model setup, consent, and validation; this browser build will not invent emotion labels from facial motion.</p></div>\n            <div className="bio-method-note"><strong>Stress / cognitive load</strong><p>Not inferred from video. rPPG variability and face motion are affected by illumination, movement, camera auto-exposure, and environment. Use the cognitive check-in to record your own focus and load.</p></div>\n          </div>}\n        </section>\n        <div className="bio-limits"><strong><AlertTriangle size={15} /> What this can and cannot do</strong><p>This demo visualizes camera signal quality, descriptive RGB features, face-region/motion status, and an experimental pulse candidate. It does not detect stress, diagnose a condition, or infer emotion, truthfulness, or cognitive ability from facial movements.</p></div>
+        <section className="bio-research-panel">
+          <button className="bio-research-toggle" aria-expanded={showResearchPanel} onClick={() => setShowResearchPanel((value) => !value)}><span><ScanFace size={16} /> ADVANCED SIGNAL ANALYSIS / RESEARCH VIEW</span><span>{showResearchPanel ? 'Hide details −' : 'Show details +'}</span></button>
+          {showResearchPanel && <div className="bio-research-content">
+            <p className="bio-explainer">Live descriptive features calculated from camera RGB samples. These are signal diagnostics, not an objective emotion, stress, or cognitive-load classifier.</p>
+            <div className="bio-research-grid">
+              <div><span>GREEN CHANNEL VARIABILITY</span><strong>{signalMetrics.variability === null ? '—' : signalMetrics.variability.toFixed(2)}</strong><small>Standard deviation · intensity units</small></div>
+              <div><span>SHORT-WINDOW STABILITY</span><strong>{signalMetrics.stability === null ? '—' : Math.round(signalMetrics.stability) + '%'}</strong><small>Heuristic signal-quality indicator</small></div>
+              <div><span>SAMPLE RATE</span><strong>{signalMetrics.sampleRate ? signalMetrics.sampleRate.toFixed(1) + ' Hz' : '—'}</strong><small>Actual camera sample timestamps</small></div>
+              <div><span>FACE / MOTION STATUS</span><strong>{signalMetrics.motion.toUpperCase()}</strong><small>{faceTracking === 'native' ? 'Browser FaceDetector available' : faceTracking === 'fallback' ? 'Center-region fallback; face not verified' : 'Face detection unavailable'}</small></div>
+            </div>
+            <div className="bio-rgb-strip"><span>MEAN RGB INTENSITY</span><div><i style={{ width: Math.min(100, signalMetrics.redMean / 255 * 100) + '%', background: '#f0808b' }} /><b>R {signalMetrics.redMean ? Math.round(signalMetrics.redMean) : '—'}</b></div><div><i style={{ width: Math.min(100, signalMetrics.greenMean / 255 * 100) + '%', background: '#78d6a4' }} /><b>G {signalMetrics.greenMean ? Math.round(signalMetrics.greenMean) : '—'}</b></div><div><i style={{ width: Math.min(100, signalMetrics.blueMean / 255 * 100) + '%', background: '#80aaff' }} /><b>B {signalMetrics.blueMean ? Math.round(signalMetrics.blueMean) : '—'}</b></div></div>
+            <div className="bio-method-note"><strong>Emotion / micro-expression module</strong><p>No facial emotion classifier is currently loaded. A future DeepFace/OpenFace service would need explicit model setup, consent, and validation; this browser build will not invent emotion labels from facial motion.</p></div>
+            <div className="bio-method-note"><strong>Stress / cognitive load</strong><p>Not inferred from video. rPPG variability and face motion are affected by illumination, movement, camera auto-exposure, and environment. Use the cognitive check-in to record your own focus and load.</p></div>
+          </div>}
+        </section>
+        <div className="bio-limits"><strong><AlertTriangle size={15} /> What this can and cannot do</strong><p>This demo visualizes camera signal quality, descriptive RGB features, face-region/motion status, and an experimental pulse candidate. It does not detect stress, diagnose a condition, or infer emotion, truthfulness, or cognitive ability from facial movements.</p></div>
       </div>
     </div>
   );
