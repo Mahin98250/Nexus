@@ -16,6 +16,12 @@ A simulated desktop inside the browser. Open, close, minimize, and move applicat
 ### 04 · RealityScan Live
 A live object-detection view using MediaPipe's EfficientDet Lite model. It draws confidence-labelled boxes with short-lived IDs and smoothing to reduce visual jitter. IDs are lightweight visual associations, not guaranteed persistent identities or a full multi-object tracker.
 
+## VitalSense DeepFace expression classifier
+
+VitalSense includes an optional DeepFace API integration for frame-by-frame facial-expression estimates. The browser UI is opt-in and sends a reduced-resolution frame only while expression analysis is enabled. The service processes frames in memory and does not save them.
+
+**This is not a micro-expression classifier.** DeepFace's emotion head predicts broad expression categories from individual frames; it cannot reliably reveal internal emotion, stress, or cognitive load. Read the setup and privacy notes in [services/deepface/README.md](services/deepface/README.md) before enabling it. The service is not deployed by GitHub Pages; run it locally or configure a secured API you control.
+
 ## Development
 
 Requirements: Node.js 22.12 or newer and npm.

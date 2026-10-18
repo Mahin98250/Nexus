@@ -21,6 +21,8 @@ jobs:
           node-version: 22
       - name: Install dependencies
         run: npm install --ignore-scripts
+      - name: Check DeepFace API Python syntax
+        run: python -m py_compile services/deepface/app.py
       - name: Dependency audit
         run: npm audit --audit-level=high
       - name: Type-check
