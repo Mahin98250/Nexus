@@ -638,7 +638,17 @@ export default function App() {
         let inferenceFailed = false;
         let currentHandCount = 0;
         try {
-          if (tracker) {
+          if (gestureRecognizerRef.current) {
+            const result = gestureRecognizerRef.current.recognizeForVideo(video, now);
+            const landmarks = result.landmarks ?? [];
+            const topGesture = result.gestures?.[0]?.[0];
+            latestHandLandmarksRef.current = landmarks[0];
+            handInputRef.current = deriveHandInput(
+              landmarks[0], now, handInputRef.current.pinch,
+              topGesture?.categoryName ?? null, topGesture?.score ?? 0,
+            );
+            currentHandCount = landmarks.length;
+          } else if (tracker) {
             const result = tracker.detectForVideo(video, now);
             const landmarks = result.landmarks ?? [];
             latestHandLandmarksRef.current = landmarks[0];
@@ -712,7 +722,7 @@ export default function App() {
             : 'Tracking hiccup · retrying vision engine…');
         } else {
           consecutiveInferenceErrors = 0;
-          if (tracker) {
+          if (gestureRecognizerRef.current || tracker) {
             const guidance = currentHandCount > 0 ? getAirHandFrameGuidance(latestHandLandmarksRef.current) : '';
             publishLoopStatus(currentHandCount > 0
               ? (guidance || 'Hand detected · ' + 'landmark tracker')
