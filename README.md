@@ -67,3 +67,13 @@ This app uses Vite, so publishing the source tree directly with the default Jeky
 3. When the workflow finishes successfully, open the Pages URL shown in the deployment job.
 
 The manual deployment workflow builds with the project path `/Nexus/`, audits dependencies, and publishes only the generated `dist` artifact.
+
+---
+
+## Project links
+
+- **GitHub profile:** https://github.com/Mahin98250
+- **Portfolio repository:** https://github.com/Mahin98250/Porfolio
+- **More projects:** https://github.com/Mahin98250?tab=repositories
+
+> Live demo links will be added only after the deployment URL is verified.
