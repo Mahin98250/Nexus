@@ -4,8 +4,7 @@ import {
   Hand, HeartPulse, Layers3, Maximize2, Monitor, Move3D, Play, ScanLine,
   Settings2, ShieldCheck, Sparkles, Target, X, Sun, Moon,
 } from 'lucide-react';
-import { FilesetResolver } from '@mediapipe/tasks-vision';
-import type { HandLandmarker, PoseLandmarker } from '@mediapipe/tasks-vision';
+import { FilesetResolver, HandLandmarker, PoseLandmarker } from '@mediapipe/tasks-vision';
 import ShadowStrikeGame from './components/ShadowStrikeGame';
 import AirOSDesktop from './components/AirOSDesktop';
 import RealityScanOverlay from './components/RealityScanOverlay';
@@ -468,7 +467,7 @@ export default function App() {
         for (const modelAssetPath of handModelCandidates) {
           for (const delegate of ['GPU', 'CPU'] as const) {
             try {
-              handLandmarker = await (await import('@mediapipe/tasks-vision')).HandLandmarker.createFromOptions(vision, {
+              handLandmarker = await HandLandmarker.createFromOptions(vision, {
                 ...trackingOptions,
                 baseOptions: { modelAssetPath, delegate },
               });
@@ -507,7 +506,7 @@ export default function App() {
         for (const modelAssetPath of poseModelCandidates) {
           for (const delegate of ['GPU', 'CPU'] as const) {
             try {
-              poseLandmarker = await (await import('@mediapipe/tasks-vision')).PoseLandmarker.createFromOptions(vision, {
+              poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
                 ...poseOptions,
                 baseOptions: { modelAssetPath, delegate },
               });
