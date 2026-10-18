@@ -94,6 +94,7 @@ export default function BiometricsMonitor({ cameraEnabled, videoRef, handInputRe
   const [emotionLoading, setEmotionLoading] = useState(false);
   const [emotionResult, setEmotionResult] = useState<EmotionResult | null>(null);
   const [emotionError, setEmotionError] = useState('');
+  const [emotionApiStatus, setEmotionApiStatus] = useState<'untested' | 'checking' | 'online' | 'offline'>('untested');
   const emotionRequestRef = useRef(false);
   const [faceTracking, setFaceTracking] = useState<'native' | 'fallback' | 'unavailable'>('fallback');
   const [faceFrame, setFaceFrame] = useState({ x: 0.28, y: 0.14, width: 0.44, height: 0.58 });
@@ -117,6 +118,7 @@ export default function BiometricsMonitor({ cameraEnabled, videoRef, handInputRe
       setEmotionEnabled(false);
       setEmotionResult(null);
       setEmotionError('');
+      setEmotionApiStatus('untested');
     }
   }, [cameraEnabled]);
 
@@ -272,6 +274,29 @@ export default function BiometricsMonitor({ cameraEnabled, videoRef, handInputRe
   }, [paused, videoRef]);
 
 
+  const testEmotionApi = async () => {
+    let cancelledEndpoint: URL;
+    try {
+      cancelledEndpoint = new URL(emotionEndpoint.trim());
+      if (!['http:', 'https:'].includes(cancelledEndpoint.protocol)) throw new Error('Use an http:// or https:// API endpoint.');
+    } catch (error) {
+      setEmotionApiStatus('offline');
+      setEmotionError(error instanceof Error ? error.message : 'Enter a valid API endpoint.');
+      return;
+    }
+    setEmotionApiStatus('checking');
+    setEmotionError('');
+    try {
+      const response = await fetch(cancelledEndpoint.toString().replace(/\/+$/, '') + '/health', { method: 'GET' });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || payload.status !== 'ok') throw new Error('API health check failed. Start the DeepFace service and check its CORS settings.');
+      setEmotionApiStatus('online');
+    } catch {
+      setEmotionApiStatus('offline');
+      setEmotionError('Cannot reach the DeepFace API. Start services/deepface locally or enter a reachable HTTPS API URL. GitHub Pages does not host the Python model.');
+    }
+  };
+
   // Emotion analysis is strictly opt-in. Frames are sent only to the endpoint the user configures.
   useEffect(() => {
     if (!cameraEnabled || !emotionEnabled) return;
@@ -385,9 +410,12 @@ export default function BiometricsMonitor({ cameraEnabled, videoRef, handInputRe
               <label className="bio-mood-label" htmlFor="bio-emotion-endpoint">Classifier API endpoint</label>
               <input id="bio-emotion-endpoint" className="bio-emotion-endpoint" value={emotionEndpoint} onChange={(event) => setEmotionEndpoint(event.currentTarget.value)} disabled={emotionEnabled} spellCheck={false} />
               <div className="bio-emotion-actions">
-                <button className="button button-primary" disabled={!cameraEnabled || emotionLoading && !emotionEnabled} onClick={() => { setEmotionError(''); setEmotionResult(null); setEmotionEnabled((value) => !value); }}>{emotionEnabled ? 'Stop classifier' : 'I consent · Start expression analysis'}</button>
+                <button className="button button-secondary" disabled={emotionApiStatus === 'checking'} onClick={() => void testEmotionApi()}>{emotionApiStatus === 'checking' ? 'Testing API…' : 'Test API connection'}</button>
+                <span className={'bio-emotion-state ' + (emotionApiStatus === 'online' ? 'active' : '')}>{emotionApiStatus === 'online' ? 'API ONLINE' : emotionApiStatus === 'offline' ? 'API OFFLINE' : 'API NOT TESTED'}</span>
+                <button className="button button-primary" disabled={!cameraEnabled || (emotionLoading && !emotionEnabled)} onClick={() => { setEmotionError(''); setEmotionResult(null); setEmotionEnabled((value) => !value); }}>{emotionEnabled ? 'Stop classifier' : 'I consent · Start expression analysis'}</button>
                 {emotionLoading && <span>Analyzing frame…</span>}
               </div>
+              <p className="bio-emotion-message">The public GitHub Pages site does not run Python inference. For local testing, start the included DeepFace API on this computer; for public use, configure a trusted HTTPS API endpoint.</p>
               {!cameraEnabled && <p className="bio-emotion-message">Enable the camera before starting expression analysis.</p>}
               {emotionError && <p className="bio-emotion-error" role="alert">{emotionError} Check that the API is running and allows this website in its CORS settings.</p>}
               {emotionResult && <div className="bio-emotion-result" aria-live="polite">

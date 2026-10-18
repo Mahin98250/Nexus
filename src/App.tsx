@@ -4,7 +4,7 @@ import {
   Hand, HeartPulse, Layers3, Maximize2, Monitor, Move3D, Play, ScanLine,
   Settings2, ShieldCheck, Sparkles, Target, X, Sun, Moon,
 } from 'lucide-react';
-import type { HandLandmarker, PoseLandmarker } from '@mediapipe/tasks-vision';
+import type { GestureRecognizer, HandLandmarker, PoseLandmarker } from '@mediapipe/tasks-vision';
 import ShadowStrikeGame from './components/ShadowStrikeGame';
 import AirOSDesktop from './components/AirOSDesktop';
 import RealityScanOverlay from './components/RealityScanOverlay';
@@ -95,6 +95,10 @@ const handModelCandidates = [
   'https://github.com/sanderdesnaijer/mediapipe-model-mirrors/releases/download/v1/hand_landmarker.task',
 ];
 
+const gestureModelCandidates = [
+  'https://storage.googleapis.com/mediapipe-models/gesture_recognizer/gesture_recognizer/float16/1/gesture_recognizer.task',
+];
+
 const poseModelCandidates = [
   'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task',
 ];
@@ -130,6 +134,7 @@ export default function App() {
   const calibrationSamplesRef = useRef(0);
   const bodyInputRef = useRef<BodyInput>({ ...EMPTY_BODY_INPUT });
   const videoRef = useRef<HTMLVideoElement>(null);
+  const gestureRecognizerRef = useRef<GestureRecognizer | null>(null);
   const gestureStabilizerRef = useRef(new AirHandGestureStabilizer(65));
   const landmarkerRef = useRef<HandLandmarker | null>(null);
   const lastHandCountRef = useRef(-1);
@@ -296,6 +301,8 @@ export default function App() {
     setCameraStarting(false);
     if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
     frameRef.current = null;
+    gestureRecognizerRef.current?.close();
+    gestureRecognizerRef.current = null;
     gestureStabilizerRef.current.reset();
     landmarkerRef.current?.close();
     landmarkerRef.current = null;
@@ -481,43 +488,79 @@ export default function App() {
       const trackingOptions = {
         runningMode: 'VIDEO' as const,
         numHands: 2,
-        minHandDetectionConfidence: 0.45,
-        minHandPresenceConfidence: 0.45,
-        minTrackingConfidence: 0.45,
+        minHandDetectionConfidence: 0.35,
+        minHandPresenceConfidence: 0.35,
+        minTrackingConfidence: 0.4,
       };
       if (trackHands) {
-        // Use the lightweight landmark model directly. GestureRecognizer adds a
-        // second CPU-only classifier graph on many browsers; geometry-based
-        // gesture recognition below is faster and keeps pinch control responsive.
-        let handLandmarker: HandLandmarker | null = null;
-        let handModelError: unknown = null;
-        for (const modelAssetPath of handModelCandidates) {
+        // Prefer the trained GestureRecognizer used by the earlier working build.
+        // If its model is unavailable, use the lightweight landmark-only fallback.
+        const gestureOptions = {
+          runningMode: 'VIDEO' as const,
+          numHands: 2,
+          minHandDetectionConfidence: 0.35,
+          minHandPresenceConfidence: 0.35,
+          minTrackingConfidence: 0.4,
+        };
+        let recognizer: GestureRecognizer | null = null;
+        let gestureModelError: unknown = null;
+        for (const modelAssetPath of gestureModelCandidates) {
           for (const delegate of ['GPU', 'CPU'] as const) {
             try {
-              handLandmarker = await mediaPipeModule.HandLandmarker.createFromOptions(vision, {
-                ...trackingOptions,
+              recognizer = await mediaPipeModule.GestureRecognizer.createFromOptions(vision, {
+                ...gestureOptions,
                 baseOptions: { modelAssetPath, delegate },
               });
               break;
             } catch (error) {
-              handModelError = error;
+              gestureModelError = error;
             }
           }
-          if (handLandmarker) break;
+          if (recognizer) break;
         }
-        if (!handLandmarker) {
-          const details = getRuntimeErrorDetails(handModelError);
-          throw new Error('Hand landmark model failed to load (' +
-            (details.name ? details.name + ': ' : '') +
-            (details.message || 'model unavailable') +
-            '). Check the network/model download and retry.');
+
+        if (recognizer) {
+          if (sessionId !== cameraSessionRef.current) {
+            recognizer.close();
+            stream.getTracks().forEach((track) => track.stop());
+            return;
+          }
+          gestureRecognizerRef.current = recognizer;
+        } else {
+          let fallbackLandmarker: HandLandmarker | null = null;
+          let fallbackError: unknown = gestureModelError;
+          for (const modelAssetPath of handModelCandidates) {
+            for (const delegate of ['GPU', 'CPU'] as const) {
+              try {
+                fallbackLandmarker = await mediaPipeModule.HandLandmarker.createFromOptions(vision, {
+                  ...trackingOptions,
+                  baseOptions: { modelAssetPath, delegate },
+                });
+                break;
+              } catch (error) {
+                fallbackError = error;
+              }
+            }
+            if (fallbackLandmarker) break;
+          }
+          if (!fallbackLandmarker) {
+            const gestureDetails = getRuntimeErrorDetails(gestureModelError);
+            const fallbackDetails = getRuntimeErrorDetails(fallbackError);
+            throw new Error(
+              'Gesture model and landmark fallback failed. Gesture model: ' +
+              (gestureDetails.message || gestureDetails.name || 'unavailable') +
+              '. Landmark model: ' +
+              (fallbackDetails.message || fallbackDetails.name || 'unavailable') +
+              '. Check network/model access and retry.'
+            );
+          }
+          if (sessionId !== cameraSessionRef.current) {
+            fallbackLandmarker.close();
+            stream.getTracks().forEach((track) => track.stop());
+            return;
+          }
+          landmarkerRef.current = fallbackLandmarker;
         }
-        if (sessionId !== cameraSessionRef.current) {
-          handLandmarker.close();
-          stream.getTracks().forEach((track) => track.stop());
-          return;
-        }
-        landmarkerRef.current = handLandmarker;
       }
       if (trackBody) {
         const poseOptions = {
@@ -595,7 +638,17 @@ export default function App() {
         let inferenceFailed = false;
         let currentHandCount = 0;
         try {
-          if (tracker) {
+          if (gestureRecognizerRef.current) {
+            const result = gestureRecognizerRef.current.recognizeForVideo(video, now);
+            const landmarks = result.landmarks ?? [];
+            const topGesture = result.gestures?.[0]?.[0];
+            latestHandLandmarksRef.current = landmarks[0];
+            handInputRef.current = deriveHandInput(
+              landmarks[0], now, handInputRef.current.pinch,
+              topGesture?.categoryName ?? null, topGesture?.score ?? 0,
+            );
+            currentHandCount = landmarks.length;
+          } else if (tracker) {
             const result = tracker.detectForVideo(video, now);
             const landmarks = result.landmarks ?? [];
             latestHandLandmarksRef.current = landmarks[0];
@@ -669,7 +722,7 @@ export default function App() {
             : 'Tracking hiccup · retrying vision engine…');
         } else {
           consecutiveInferenceErrors = 0;
-          if (tracker) {
+          if (gestureRecognizerRef.current || tracker) {
             const guidance = currentHandCount > 0 ? getAirHandFrameGuidance(latestHandLandmarksRef.current) : '';
             publishLoopStatus(currentHandCount > 0
               ? (guidance || 'Hand detected · ' + 'landmark tracker')
@@ -700,6 +753,8 @@ export default function App() {
       }
       if (sessionId !== cameraSessionRef.current) return;
       handInputRef.current = { ...EMPTY_HAND_INPUT };
+      gestureRecognizerRef.current?.close();
+      gestureRecognizerRef.current = null;
       landmarkerRef.current?.close();
       landmarkerRef.current = null;
       poseLandmarkerRef.current?.close();
@@ -744,6 +799,8 @@ export default function App() {
   useEffect(() => () => {
     cameraSessionRef.current += 1;
     if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
+    gestureRecognizerRef.current?.close();
+    gestureRecognizerRef.current = null;
     landmarkerRef.current?.close();
     poseLandmarkerRef.current?.close();
     streamRef.current?.getTracks().forEach((track) => track.stop());
