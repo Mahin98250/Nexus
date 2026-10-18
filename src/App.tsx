@@ -83,7 +83,7 @@ const mediaPipeRuntimeVersion = '0.10.22';
 const visionWasmCandidates = [
   // Prefer the runtime assets shipped with this app. import.meta.env.BASE_URL
   // keeps this path correct both at / and under GitHub Pages' /Nexus/ prefix.
-  `${import.meta.env.BASE_URL}mediapipe/wasm`,
+  `/Nexus/mediapipe/wasm`,
   `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${mediaPipeRuntimeVersion}/wasm`,
   `https://unpkg.com/@mediapipe/tasks-vision@${mediaPipeRuntimeVersion}/wasm`,
 ];
