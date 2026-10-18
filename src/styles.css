@@ -366,3 +366,24 @@
 .bio-controls{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 14px;border:1px solid rgba(249,168,212,.14);border-radius:10px;background:rgba(249,168,212,.035)}
 .bio-controls>span{font-size:10px;color:#9da8c4}
 .theme-light .bio-controls{background:rgba(67,77,127,.035);border-color:rgba(67,77,127,.13)}
+
+
+/* VitalSense functional modes and hand-operated controls */
+.bio-modebar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px;border:1px solid rgba(249,168,212,.15);border-radius:12px;background:rgba(249,168,212,.035)}
+.bio-modebar button{border:1px solid rgba(180,190,255,.14);border-radius:8px;padding:10px 13px;background:rgba(255,255,255,.025);color:#aeb8d5;font:10px var(--mono);cursor:pointer}
+.bio-modebar button.is-active{color:#ffe1f0;border-color:rgba(249,168,212,.55);background:rgba(249,168,212,.12);box-shadow:0 0 18px rgba(249,168,212,.07)}
+.bio-modebar .bio-manual-trigger{margin-left:auto;color:#f9a8d4}
+.bio-gesture-manual{padding:14px 16px;border:1px solid rgba(249,168,212,.22);border-radius:11px;background:rgba(249,168,212,.055);font-size:11px;line-height:1.7;color:#bdc7e1}
+.bio-gesture-manual>strong{font:10px var(--mono);letter-spacing:.8px;color:#f9a8d4}
+.bio-gesture-manual p{margin:8px 0 0}
+.bio-gesture-feedback{display:flex;align-items:center;gap:9px;min-height:36px;padding:8px 12px;border:1px solid rgba(180,190,255,.12);border-radius:9px;color:#aeb8d5;font-size:10px}
+.bio-checkin-mode .bio-pulse-panel{display:none}
+.bio-checkin-mode .bio-panel:not(.bio-pulse-panel){grid-column:1/-1}
+.bio-mood-label{display:block;margin:12px 0 8px;font-size:11px;color:#cbd4eb}
+#bio-mood{width:100%;padding:10px;border:1px solid rgba(249,168,212,.22);border-radius:8px;background:#11172b;color:#f2d7e6}
+.theme-light .bio-modebar,.theme-light .bio-gesture-manual,.theme-light .bio-gesture-feedback{background:rgba(67,77,127,.035);border-color:rgba(67,77,127,.14);color:#4e5d7b}
+.theme-light .bio-modebar button{color:#53617f}
+.theme-light .bio-modebar button.is-active{color:#7b2856;background:rgba(249,168,212,.18)}
+.theme-light .bio-mood-label{color:#53617f}
+.theme-light #bio-mood{background:#fff;color:#26324e}
+@media(max-width:520px){.bio-modebar{align-items:stretch}.bio-modebar button{flex:1}.bio-modebar .bio-manual-trigger{margin-left:0}}
