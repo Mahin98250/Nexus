@@ -430,25 +430,9 @@ export default function App() {
       }
 
       setCameraStatus(active === 'shadowstrike' ? 'Loading pose-tracking model…' : 'Loading hand-tracking model…');
-      // Import the vision runtime from the app's own npm bundle; do not depend on a CDN for JavaScript.
-      let vision: Awaited<ReturnType<typeof FilesetResolver.forVisionTasks>> | null = null;
-      let wasmError: unknown = null;
-      for (const wasmRoot of visionWasmCandidates) {
-        try {
-          vision = await FilesetResolver.forVisionTasks(wasmRoot);
-          break;
-        } catch (error) {
-          wasmError = error;
-        }
-      }
-      if (!vision) {
-        const details = getRuntimeErrorDetails(wasmError);
-        throw new Error(`MediaPipe WASM runtime failed to load from both CDNs for release ${mediaPipeRuntimeVersion} (${details.name ? details.name + ': ' : ''}${details.message}). Check the connection or content blocker and retry.`);
-      }
-      if (sessionId !== cameraSessionRef.current) {
-        stream.getTracks().forEach((track) => track.stop());
-        return;
-      }
+      // The resolver can succeed before its WASM assets are actually fetched.
+      // Therefore retry the entire resolver + model initialization for each CDN,
+      // rather than resolving jsDelivr once and then retrying only the model URL.
       const trackHands = active !== 'shadowstrike';
       const trackBody = active === 'shadowstrike';
       const trackingOptions = {
@@ -458,76 +442,93 @@ export default function App() {
         minHandPresenceConfidence: 0.45,
         minTrackingConfidence: 0.45,
       };
-      if (trackHands) {
-        // Use the lightweight landmark model directly. GestureRecognizer adds a
-        // second CPU-only classifier graph on many browsers; geometry-based
-        // gesture recognition below is faster and keeps pinch control responsive.
-        let handLandmarker: HandLandmarker | null = null;
-        let handModelError: unknown = null;
-        for (const modelAssetPath of handModelCandidates) {
-          for (const delegate of ['GPU', 'CPU'] as const) {
-            try {
-              handLandmarker = await HandLandmarker.createFromOptions(vision, {
-                ...trackingOptions,
-                baseOptions: { modelAssetPath, delegate },
-              });
-              break;
-            } catch (error) {
-              handModelError = error;
-            }
-          }
-          if (handLandmarker) break;
-        }
-        if (!handLandmarker) {
-          const details = getRuntimeErrorDetails(handModelError);
-          throw new Error('Hand landmark model failed to load (' +
-            (details.name ? details.name + ': ' : '') +
-            (details.message || 'model unavailable') +
-            '). Check the network/model download and retry.');
+      const poseOptions = {
+        runningMode: 'VIDEO' as const,
+        numPoses: 1,
+        minPoseDetectionConfidence: 0.55,
+        minPosePresenceConfidence: 0.55,
+        minTrackingConfidence: 0.55,
+        outputSegmentationMasks: false,
+      };
+      let vision: Awaited<ReturnType<typeof FilesetResolver.forVisionTasks>> | null = null;
+      let handLandmarker: HandLandmarker | null = null;
+      let poseLandmarker: PoseLandmarker | null = null;
+      let runtimeError: unknown = null;
+      let attemptedRuntime = false;
+
+      for (const wasmRoot of visionWasmCandidates) {
+        let candidateVision: Awaited<ReturnType<typeof FilesetResolver.forVisionTasks>> | null = null;
+        try {
+          candidateVision = await FilesetResolver.forVisionTasks(wasmRoot);
+          attemptedRuntime = true;
+        } catch (error) {
+          runtimeError = error;
+          continue;
         }
         if (sessionId !== cameraSessionRef.current) {
-          handLandmarker.close();
           stream.getTracks().forEach((track) => track.stop());
           return;
         }
-        landmarkerRef.current = handLandmarker;
-      }
-      if (trackBody) {
-        const poseOptions = {
-          runningMode: 'VIDEO' as const,
-          numPoses: 1,
-          minPoseDetectionConfidence: 0.55,
-          minPosePresenceConfidence: 0.55,
-          minTrackingConfidence: 0.55,
-          outputSegmentationMasks: false,
-        };
-        let poseLandmarker: PoseLandmarker | null = null;
-        let poseModelError: unknown = null;
-        for (const modelAssetPath of poseModelCandidates) {
-          for (const delegate of ['GPU', 'CPU'] as const) {
-            try {
-              poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
-                ...poseOptions,
-                baseOptions: { modelAssetPath, delegate },
-              });
-              break;
-            } catch (error) {
-              poseModelError = error;
+
+        if (trackHands) {
+          // Try both model mirrors and both delegates against each complete WASM runtime.
+          for (const modelAssetPath of handModelCandidates) {
+            for (const delegate of ['GPU', 'CPU'] as const) {
+              try {
+                handLandmarker = await HandLandmarker.createFromOptions(candidateVision, {
+                  ...trackingOptions,
+                  baseOptions: { modelAssetPath, delegate },
+                });
+                break;
+              } catch (error) {
+                runtimeError = error;
+              }
             }
+            if (handLandmarker) break;
           }
-          if (poseLandmarker) break;
+          if (handLandmarker) {
+            vision = candidateVision;
+            break;
+          }
+        } else if (trackBody) {
+          for (const modelAssetPath of poseModelCandidates) {
+            for (const delegate of ['GPU', 'CPU'] as const) {
+              try {
+                poseLandmarker = await PoseLandmarker.createFromOptions(candidateVision, {
+                  ...poseOptions,
+                  baseOptions: { modelAssetPath, delegate },
+                });
+                break;
+              } catch (error) {
+                runtimeError = error;
+              }
+            }
+            if (poseLandmarker) break;
+          }
+          if (poseLandmarker) {
+            vision = candidateVision;
+            break;
+          }
         }
-        if (!poseLandmarker) {
-          const details = getRuntimeErrorDetails(poseModelError);
-          throw new Error(`Pose model failed to load (${details.name ? details.name + ': ' : ''}${details.message}). Check the network and retry.`);
-        }
-        if (sessionId !== cameraSessionRef.current) {
-          poseLandmarker.close();
-          stream.getTracks().forEach((track) => track.stop());
-          return;
-        }
-        poseLandmarkerRef.current = poseLandmarker;
       }
+
+      if (!vision || (trackHands && !handLandmarker) || (trackBody && !poseLandmarker)) {
+        const details = getRuntimeErrorDetails(runtimeError);
+        const cause = (details.name ? details.name + ': ' : '') + (details.message || 'resource unavailable');
+        if (!attemptedRuntime) {
+          throw new Error(`MediaPipe WASM assets could not load from either CDN for release ${mediaPipeRuntimeVersion} (${cause}). Check the connection or content blocker and retry.`);
+        }
+        throw new Error(`MediaPipe ${trackBody ? 'pose' : 'hand landmark'} model failed to initialize after trying both WASM CDNs, model mirrors, and GPU/CPU delegates (${cause}). Check the connection/content blocker and retry.`);
+      }
+
+      if (sessionId !== cameraSessionRef.current) {
+        handLandmarker?.close();
+        poseLandmarker?.close();
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
+      if (handLandmarker) landmarkerRef.current = handLandmarker;
+      if (poseLandmarker) poseLandmarkerRef.current = poseLandmarker;
       if (sessionId !== cameraSessionRef.current) return;
       cameraStartingRef.current = false;
       setCameraStarting(false);
