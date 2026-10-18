@@ -188,11 +188,12 @@ export default function App() {
       const enabled = cameraOn && active !== 'shadowstrike';
       if (!enabled) {
         cursor.style.visibility = 'hidden';
-        cursor.classList.remove('global-gesture-pinching');
+        cursor.classList.remove('global-gesture-pinching', 'global-gesture-scrolling');
         clearHover();
         globalGestureActivationGateRef.current.reset();
         handScrollRef.current.active = false;
-        frame = requestAnimationFrame(tick);
+        // This effect is only started while enabled. Do not keep scheduling
+        // animation frames after the camera/experience state becomes inactive.
         return;
       }
       const isScrollGesture = hand.detected && hand.gesture === 'Fist' && !hand.pinch;
@@ -270,7 +271,8 @@ export default function App() {
       cancelAnimationFrame(frame);
       clearHover();
       cursor.style.visibility = 'hidden';
-      cursor.classList.remove('global-gesture-pinching');
+      cursor.classList.remove('global-gesture-pinching', 'global-gesture-scrolling');
+      handScrollRef.current.active = false;
       globalGestureActivationGateRef.current.reset();
     };
   }, [active, cameraOn]);
