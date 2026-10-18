@@ -114,6 +114,7 @@ export default function App() {
   const globalHoveredElementRef = useRef<HTMLElement | null>(null);
   const globalGestureActivationGateRef = useRef(new GestureActivationGate());
   const globalCursorSmootherRef = useRef(new AirHandCursorSmoother());
+  const handScrollRef = useRef<{ active: boolean; lastY: number; lastAt: number }>({ active: false, lastY: 0.5, lastAt: 0 });
   const cursorCalibratorRef = useRef<AirHandCursorCalibrator | null>(null);
   const calibratingCursorRef = useRef(false);
   const cursorBoundsRef = useRef<AirHandCursorBounds | null>(null);
@@ -164,6 +165,41 @@ export default function App() {
       globalHoveredElementRef.current?.classList.remove('global-gesture-hover');
       globalHoveredElementRef.current = null;
     };
+    const scrollAtPoint = (x: number, y: number, delta: number) => {
+      if (!Number.isFinite(delta) || Math.abs(delta) < 1) return;
+      const hit = document.elementFromPoint(x * window.innerWidth, y * window.innerHeight) as HTMLElement | null;
+      if (isScrollGesture) {
+        cursor.style.visibility = 'visible';
+        cursor.style.left = (x * 100) + 'vw';
+        cursor.style.top = (y * 100) + 'vh';
+        cursor.classList.remove('global-gesture-pinching');
+        cursor.classList.add('global-gesture-scrolling');
+        clearHover();
+        const scrollState = handScrollRef.current;
+        const now = performance.now();
+        if (scrollState.active && now - scrollState.lastAt < 120) {
+          const delta = (scrollState.lastY - y) * window.innerHeight * 1.35;
+          scrollAtPoint(x, y, delta);
+        }
+        handScrollRef.current = { active: true, lastY: y, lastAt: now };
+        frame = requestAnimationFrame(tick);
+        return;
+      }
+      handScrollRef.current.active = false;
+      cursor.classList.remove('global-gesture-scrolling');
+      let node: HTMLElement | null = hit;
+      while (node && node !== document.body && node !== document.documentElement) {
+        const style = window.getComputedStyle(node);
+        const canScroll = /(auto|scroll)/.test(style.overflowY) && node.scrollHeight > node.clientHeight + 2;
+        if (canScroll) {
+          const before = node.scrollTop;
+          node.scrollTop += delta;
+          if (node.scrollTop !== before) return;
+        }
+        node = node.parentElement;
+      }
+      window.scrollBy({ top: delta, behavior: 'auto' });
+    };
     const tick = () => {
       const hand = handInputRef.current;
       // AirOS owns its internal cursor and window gestures. ShadowStrike uses
@@ -174,9 +210,12 @@ export default function App() {
         cursor.classList.remove('global-gesture-pinching');
         clearHover();
         globalGestureActivationGateRef.current.reset();
+        handScrollRef.current.active = false;
+        frame = requestAnimationFrame(tick);
         return;
       }
-      const clickStarted = globalGestureActivationGateRef.current.update(hand.detected, hand.detected && hand.pinch);
+      const isScrollGesture = hand.detected && hand.gesture === 'Fist' && !hand.pinch;
+      const clickStarted = globalGestureActivationGateRef.current.update(hand.detected && !isScrollGesture, hand.detected && hand.pinch && !isScrollGesture);
       if (!hand.detected) {
         // Tracking loss hides interaction and disarms clicks until a visible release.
         // Do not let a held pinch accidentally activate again when the hand reappears.
