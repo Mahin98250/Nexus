@@ -362,3 +362,7 @@
 .theme-light .biometrics-layout{color:#202b49}.theme-light .biometrics-banner,.theme-light .bio-panel{background:#fff;border-color:rgba(67,77,127,.15)}.theme-light .biometrics-banner p,.theme-light .bio-explainer,.theme-light .bio-disclaimer,.theme-light .bio-limits,.theme-light .bio-callout span{color:#5f6d8d}.theme-light .bio-callout,.theme-light .bio-consent-note,.theme-light .bio-limits{background:rgba(67,77,127,.035)}
 @media(max-width:850px){.biometrics-grid{grid-template-columns:1fr}.biometrics-banner{flex-direction:column}.bio-face-preview{height:clamp(190px,42vw,300px)}}
 @media(max-width:520px){.biometrics-layout{padding:10px}.bio-panel{padding:12px}.bio-heart-metric{align-items:flex-start}.bio-confidence{max-width:110px}.bio-panel-top>span:last-child{font-size:7px}}
+
+.bio-controls{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 14px;border:1px solid rgba(249,168,212,.14);border-radius:10px;background:rgba(249,168,212,.035)}
+.bio-controls>span{font-size:10px;color:#9da8c4}
+.theme-light .bio-controls{background:rgba(67,77,127,.035);border-color:rgba(67,77,127,.13)}
