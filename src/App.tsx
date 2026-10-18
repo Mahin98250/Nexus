@@ -488,9 +488,9 @@ export default function App() {
       const trackingOptions = {
         runningMode: 'VIDEO' as const,
         numHands: 2,
-        minHandDetectionConfidence: 0.45,
-        minHandPresenceConfidence: 0.45,
-        minTrackingConfidence: 0.45,
+        minHandDetectionConfidence: 0.35,
+        minHandPresenceConfidence: 0.35,
+        minTrackingConfidence: 0.4,
       };
       if (trackHands) {
         // Prefer the trained GestureRecognizer used by the earlier working build.
@@ -498,9 +498,9 @@ export default function App() {
         const gestureOptions = {
           runningMode: 'VIDEO' as const,
           numHands: 2,
-          minHandDetectionConfidence: 0.45,
-          minHandPresenceConfidence: 0.45,
-          minTrackingConfidence: 0.45,
+          minHandDetectionConfidence: 0.35,
+          minHandPresenceConfidence: 0.35,
+          minTrackingConfidence: 0.4,
         };
         let recognizer: GestureRecognizer | null = null;
         let gestureModelError: unknown = null;
@@ -753,6 +753,8 @@ export default function App() {
       }
       if (sessionId !== cameraSessionRef.current) return;
       handInputRef.current = { ...EMPTY_HAND_INPUT };
+      gestureRecognizerRef.current?.close();
+      gestureRecognizerRef.current = null;
       landmarkerRef.current?.close();
       landmarkerRef.current = null;
       poseLandmarkerRef.current?.close();
@@ -797,6 +799,8 @@ export default function App() {
   useEffect(() => () => {
     cameraSessionRef.current += 1;
     if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
+    gestureRecognizerRef.current?.close();
+    gestureRecognizerRef.current = null;
     landmarkerRef.current?.close();
     poseLandmarkerRef.current?.close();
     streamRef.current?.getTracks().forEach((track) => track.stop());
