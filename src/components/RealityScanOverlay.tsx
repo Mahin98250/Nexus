@@ -10,7 +10,7 @@ type Props = {
 };
 
 // Match AirHand's tested browser runtime and WASM version exactly.
-const mediaPipeRuntimeVersion = '0.10.22-rc.20250304';
+const mediaPipeRuntimeVersion = '0.10.22';
 const mediaPipeBundleCandidates = [
   `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${mediaPipeRuntimeVersion}/vision_bundle.mjs`,
   `https://unpkg.com/@mediapipe/tasks-vision@${mediaPipeRuntimeVersion}/vision_bundle.mjs`,
