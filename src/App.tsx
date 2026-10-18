@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ArrowLeft, ArrowRight, Camera, Check, ChevronRight, CircleHelp, Command,
-  Hand, Layers3, Maximize2, Monitor, Move3D, Play, ScanLine,
+  Hand, HeartPulse, Layers3, Maximize2, Monitor, Move3D, Play, ScanLine,
   Settings2, ShieldCheck, Sparkles, Target, X, Sun, Moon,
 } from 'lucide-react';
 import type { GestureRecognizer, HandLandmarker, PoseLandmarker } from '@mediapipe/tasks-vision';
@@ -9,6 +9,7 @@ import ShadowStrikeGame from './components/ShadowStrikeGame';
 import AirOSDesktop from './components/AirOSDesktop';
 import RealityScanOverlay from './components/RealityScanOverlay';
 import HoloDeskScene from './components/HoloDeskScene';
+import BiometricsMonitor from './components/BiometricsMonitor';
 import { deriveHandInput } from './vision/gestures';
 import { deriveBodyInput } from './vision/bodyGestures';
 import { AirHandCursorCalibrator, AirHandCursorSmoother, AirHandGestureStabilizer, mapCalibratedCursor, validateCursorBounds, type AirHandCursorBounds, type AirHandGesture } from './vision/airHandEngine';
@@ -31,7 +32,7 @@ function getAirHandFrameGuidance(landmarks: readonly Landmark[] | undefined): st
   return '';
 }
 
-type ExperienceId = 'holodesk' | 'shadowstrike' | 'airos' | 'realityscan';
+type ExperienceId = 'holodesk' | 'shadowstrike' | 'airos' | 'realityscan' | 'biometrics';
 type Experience = {
   id: ExperienceId;
   number: string;
@@ -68,6 +69,12 @@ const experiences: Experience[] = [
     description: 'See the world through a smarter lens.',
     detail: 'Detect everyday objects through the live camera and draw confidence-labelled tracking boxes in real time. Detection runs locally in the browser.',
     icon: ScanLine, accent: 'mint', tags: ['Live camera', 'Vision tools', 'Local processing'],
+  },
+  {
+    id: 'biometrics', number: '05', title: 'VitalSense Lab', category: 'CAMERA SIGNAL LAB',
+    description: 'Explore subtle camera signals, with transparent limits.',
+    detail: 'Experiment with local facial color signals and a rough rPPG pulse candidate. Use self-reported focus and cognitive-load controls; this is not a medical device.',
+    icon: HeartPulse, accent: 'rose', tags: ['Experimental rPPG', 'Signal quality', 'Self-reported focus'],
   },
 ];
 
@@ -876,6 +883,7 @@ export default function App() {
                 {activeExperience.id === 'shadowstrike' && <ShadowStrikeGame bodyInputRef={bodyInputRef} cameraEnabled={cameraOn} />}
                 {activeExperience.id === 'airos' && <AirOSDesktop inputRef={handInputRef} cameraEnabled={cameraOn} onSwitchExperience={handleAirOSNavigation} theme={theme} onToggleTheme={() => setTheme((value) => value === 'dark' ? 'light' : 'dark')} />}
                 {activeExperience.id === 'realityscan' && <RealityScanOverlay active={cameraOn} videoRef={videoRef} onStatusChange={setCameraStatus} />}
+                {activeExperience.id === 'biometrics' && <BiometricsMonitor cameraEnabled={cameraOn} videoRef={videoRef} />}
               </div>
               <div className="camera-footer">
                 <span className="camera-status"><span className={cameraOn || cameraStarting ? 'status-dot active' : 'status-dot'} /> {cameraStatus}</span>
@@ -908,7 +916,7 @@ export default function App() {
                 <span className="field-label">EXPERIENCE MODULES</span>
                 <div className="tag-list">{activeExperience.tags.map((tag) => <span className="feature-tag" key={tag}>{tag}</span>)}</div>
               </div>
-              <div className="inspector-note"><Sparkles size={15} /><p><strong>Built to grow.</strong> The shared camera and tracking layer is being developed once, then reused across all four experiences.</p></div>
+              <div className="inspector-note"><Sparkles size={15} /><p><strong>Built to grow.</strong> The shared camera and tracking layer is being developed once, then reused across all five experiences.</p></div>
             </aside>
           </div>
           <div className="workspace-bottom">
@@ -922,20 +930,20 @@ export default function App() {
           <div className="hero">
             <div className="eyebrow"><span className="eyebrow-line" /> A NEW WAY TO INTERACT</div>
             <h1>The world<br />beyond <span className="gradient-text">touch.</span></h1>
-            <p className="hero-copy">Four experimental experiences. One camera. A whole new way to play, create, and interact with the digital world.</p>
+            <p className="hero-copy">Five experimental experiences. One camera. A whole new way to play, create, and interact with the digital world.</p>
             <div className="hero-actions">
               <button className="button button-primary" onClick={() => openExperience('holodesk')}><Play size={16} fill="currentColor" /> Enter the playground <ArrowRight size={16} /></button>
               {cameraOn || cameraStarting
                 ? <button className="button button-secondary handsfree-home-toggle" onClick={stopCamera}><X size={15} /> {cameraStarting ? 'Cancel hands-free' : 'Stop hands-free'}</button>
                 : <button className="button button-secondary handsfree-home-toggle" onClick={() => void startCamera()}><Hand size={15} /> Enable hands-free</button>}
-              <span className="hero-meta"><span className={'status-dot ' + (cameraOn ? 'active' : '')} /> {cameraOn ? (handCount ? 'HAND CONTROL READY' : 'SHOW YOUR HAND') : '4 EXPERIENCES'} <span className="meta-divider">/</span> CAMERA OPTIONAL</span>
+              <span className="hero-meta"><span className={'status-dot ' + (cameraOn ? 'active' : '')} /> {cameraOn ? (handCount ? 'HAND CONTROL READY' : 'SHOW YOUR HAND') : '5 EXPERIENCES'} <span className="meta-divider">/</span> CAMERA OPTIONAL</span>
             </div>
             {(cameraOn || cameraStarting || cameraStatus !== 'Camera is off') && <div className={'handsfree-home-status' + (cameraOn ? ' is-active' : ' is-warning')}><span className={'status-dot' + (cameraOn ? ' active' : '')} /> {cameraOn ? (handCount > 0 ? 'Hand detected · pinch a highlighted control to activate it' : 'Hands-free is on · move your hand fully into the camera view') : cameraStarting ? 'Starting hands-free tracking…' : cameraStatus}</div>}
             <div className="hero-decoration" aria-hidden="true"><div className="hero-ring ring-a" /><div className="hero-ring ring-b" /><div className="hero-ring ring-c" /><div className="hero-center"><Hand size={42} strokeWidth={1.1} /></div><div className="hero-cross cross-a" /><div className="hero-cross cross-b" /><div className="hero-cross cross-c" /><div className="hero-coordinate">SPATIAL INPUT<br />3 AXES / LIVE</div><div className="hero-chip chip-a">GESTURE INPUT <span>READY</span></div><div className="hero-chip chip-b"><span className="status-dot active" /> REAL-TIME VISION</div></div>
           </div>
           <div className="section-heading">
             <div><div className="eyebrow"><span className="eyebrow-line" /> YOUR PLAYGROUND</div><h2>Choose your reality<span className="brand-period">.</span></h2></div>
-            <span className="section-count">01 — 04 <ArrowRight size={14} /></span>
+            <span className="section-count">01 — 05 <ArrowRight size={14} /></span>
           </div>
           <div className="experience-grid">
             {experiences.map((experience) => (
@@ -945,6 +953,7 @@ export default function App() {
                   {experience.id === 'holodesk' && <div className="visual-holo"><div className="holo-orbit holo-one" /><div className="holo-orbit holo-two" /><div className="holo-cube"><div className="cube-face cube-front" /><div className="cube-face cube-back" /><div className="cube-face cube-left" /><div className="cube-face cube-right" /><div className="cube-face cube-top" /><div className="cube-face cube-bottom" /></div><div className="holo-dot dot-one" /><div className="holo-dot dot-two" /><div className="holo-dot dot-three" /></div>}
                   {experience.id === 'shadowstrike' && <div className="visual-game"><div className="game-grid" /><div className="game-target target-one" /><div className="game-target target-two" /><div className="game-target target-three" /><div className="game-player"><div className="player-head" /><div className="player-body" /><div className="player-arm arm-left" /><div className="player-arm arm-right" /><div className="player-leg leg-left" /><div className="player-leg leg-right" /></div><div className="game-score">SCORE <b>00840</b></div></div>}
                   {experience.id === 'airos' && <div className="visual-os"><div className="os-window os-window-back"><span /><span /><span /></div><div className="os-window os-window-front"><div className="os-title"><i /><i /><i /></div><div className="os-lines"><span /><span /><span /><span /></div><div className="os-widget"><Monitor size={17} /><span>Gesture<br />workspace</span></div></div><div className="os-cursor"><Move3D size={18} /></div></div>}
+                  {experience.id === 'biometrics' && <div className="visual-biometrics"><div className="bio-mini-face"><i /><i /><b /></div><div className="bio-mini-pulse"><span /><span /><span /><span /><span /><span /><span /></div><div className="bio-mini-readout"><strong>rPPG</strong><small>SIGNAL LAB</small></div><div className="bio-mini-ring" /></div>}
                   {experience.id === 'realityscan' && <div className="visual-scan"><div className="scan-object"><div className="scan-box"><span className="scan-corner corner-1" /><span className="scan-corner corner-2" /><span className="scan-corner corner-3" /><span className="scan-corner corner-4" /><span className="scan-label">OBJECT TRACKED</span></div><div className="scan-cube"><div /><div /><div /><div /><div /><div /></div></div><div className="scan-hud">LIVE / 30 FPS</div><div className="scan-line" /></div>}
                 </div>
                 <div className="card-content"><span className="card-category">{experience.category}</span><h3>{experience.title}<span className="brand-period">.</span></h3><p>{experience.description}</p></div>
@@ -958,7 +967,7 @@ export default function App() {
       )}
 
       <div ref={globalGestureCursorRef} className="global-gesture-cursor" aria-hidden="true"><span /><i /></div>
-      {showHelp && <div className="modal-backdrop" role="presentation" onClick={() => setShowHelp(false)}><section className="help-modal" role="dialog" aria-modal="true" aria-labelledby="help-title" onClick={(event) => event.stopPropagation()}><button className="modal-close" onClick={() => setShowHelp(false)} aria-label="Close help"><X size={18} /></button><div className="modal-icon"><CircleHelp size={22} /></div><div className="eyebrow">QUICK GUIDE</div><h2 id="help-title">Welcome to Nexus.</h2><p>Nexus is an experimental playground for camera-based interaction. You can enable hands-free navigation directly from Home, or enter an experience first. Move your hand until the reticle highlights a control, pinch once to activate it, and release before the next click. The camera stays off until you opt in. Switch themes using the sun/moon button in the top bar.</p><div className="help-list"><div><Camera size={16} /><span><strong>Camera access</strong><small>Requested only when you press Enable camera. Use HTTPS or localhost.</small></span></div><div><ShieldCheck size={16} /><span><strong>Privacy</strong><small>Video is processed in your browser and is not uploaded by this app.</small></span></div><div><Maximize2 size={16} /><span><strong>Good tracking</strong><small>Use bright, even light and keep your hand fully visible.</small></span></div><div><Move3D size={16} /><span><strong>Scroll the whole app</strong><small>Make a fist and move your hand up or down to scroll the page or the scrollable panel under your cursor. Open your hand to stop scrolling; pinch still activates controls.</small></span></div><div><Hand size={16} /><span><strong>Hands-free Home</strong><small>Enable hands-free in Home, then pinch a highlighted experience card to open it. Returning Home can keep your opted-in session active.</small></span></div><div><Hand size={16} /><span><strong>HoloDesk & AirOS</strong><small>In HoloDesk and RealityScan, move your hand to move the on-screen reticle; a highlighted button can be activated with one pinch. In HoloDesk, pinch over the hologram to grab it. In AirOS, pinch any highlighted button to activate it or pinch and hold a window title to move the window. Release fully before the next click.</small></span></div><div><Target size={16} /><span><strong>ShadowStrike</strong><small>Move your body to steer, raise a hand to strike, and jump to dodge. Keep your full body in view.</small></span></div><div><ScanLine size={16} /><span><strong>RealityScan Live</strong><small>Point the camera at everyday objects. Use the hand reticle to pinch visible Nexus controls; the object detector itself labels items in the camera view.</small></span></div></div><button className="button button-primary modal-done" onClick={() => setShowHelp(false)}>Got it <Check size={16} /></button></section></div>}
+      {showHelp && <div className="modal-backdrop" role="presentation" onClick={() => setShowHelp(false)}><section className="help-modal" role="dialog" aria-modal="true" aria-labelledby="help-title" onClick={(event) => event.stopPropagation()}><button className="modal-close" onClick={() => setShowHelp(false)} aria-label="Close help"><X size={18} /></button><div className="modal-icon"><CircleHelp size={22} /></div><div className="eyebrow">QUICK GUIDE</div><h2 id="help-title">Welcome to Nexus.</h2><p>Nexus is an experimental playground for camera-based interaction. You can enable hands-free navigation directly from Home, or enter an experience first. Move your hand until the reticle highlights a control, pinch once to activate it, and release before the next click. The camera stays off until you opt in. Switch themes using the sun/moon button in the top bar.</p><div className="help-list"><div><Camera size={16} /><span><strong>Camera access</strong><small>Requested only when you press Enable camera. Use HTTPS or localhost.</small></span></div><div><ShieldCheck size={16} /><span><strong>Privacy</strong><small>Video is processed in your browser and is not uploaded by this app.</small></span></div><div><Maximize2 size={16} /><span><strong>Good tracking</strong><small>Use bright, even light and keep your hand fully visible.</small></span></div><div><Move3D size={16} /><span><strong>Scroll the whole app</strong><small>Make a fist and move your hand up or down to scroll the page or the scrollable panel under your cursor. Open your hand to stop scrolling; pinch still activates controls.</small></span></div><div><Hand size={16} /><span><strong>Hands-free Home</strong><small>Enable hands-free in Home, then pinch a highlighted experience card to open it. Returning Home can keep your opted-in session active.</small></span></div><div><Hand size={16} /><span><strong>HoloDesk & AirOS</strong><small>In HoloDesk and RealityScan, move your hand to move the on-screen reticle; a highlighted button can be activated with one pinch. In HoloDesk, pinch over the hologram to grab it. In AirOS, pinch any highlighted button to activate it or pinch and hold a window title to move the window. Release fully before the next click.</small></span></div><div><Target size={16} /><span><strong>ShadowStrike</strong><small>Move your body to steer, raise a hand to strike, and jump to dodge. Keep your full body in view.</small></span></div><div><ScanLine size={16} /><span><strong>RealityScan Live</strong><small>Point the camera at everyday objects. Use the hand reticle to pinch visible Nexus controls; the object detector itself labels items in the camera view.</small></span></div><div><HeartPulse size={16} /><span><strong>VitalSense Lab</strong><small>Opt in to the camera and keep still in even light. The pulse display is an experimental signal candidate, not a validated vital sign. Focus and cognitive load are self-reported; no emotion or stress is inferred.</small></span></div></div><button className="button button-primary modal-done" onClick={() => setShowHelp(false)}>Got it <Check size={16} /></button></section></div>}
     </main>
   );
 }
