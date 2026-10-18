@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ArrowLeft, ArrowRight, Camera, Check, ChevronRight, CircleHelp, Command,
-  Activity, Hand, HeartPulse, Layers3, Maximize2, Monitor, Move3D, Play, ScanLine,
-  Settings2, ShieldCheck, Sparkles, Target, X, Sun, Moon, Waves,
+  Hand, HeartPulse, Layers3, Maximize2, Monitor, Move3D, Play, ScanLine,
+  Settings2, ShieldCheck, Sparkles, Target, X, Sun, Moon,
 } from 'lucide-react';
 import type { GestureRecognizer, HandLandmarker, PoseLandmarker } from '@mediapipe/tasks-vision';
 import ShadowStrikeGame from './components/ShadowStrikeGame';
