@@ -207,6 +207,19 @@ export default function AirOSDesktop({ inputRef, cameraEnabled, onSwitchExperien
     setPlaying(false);
   };
 
+  // Stop generated audio when AirOS is closed or the user switches experiences.
+  // Do not call stopAmbient here: it updates React state during unmount.
+  useEffect(() => () => {
+    try { oscillatorRef.current?.stop(); } catch { /* already stopped */ }
+    try { lfoRef.current?.stop(); } catch { /* already stopped */ }
+    const audio = audioContextRef.current;
+    oscillatorRef.current = null;
+    lfoRef.current = null;
+    gainRef.current = null;
+    audioContextRef.current = null;
+    if (audio && audio.state !== 'closed') void audio.close().catch(() => {});
+  }, []);
+
   const toggleAmbient = async () => {
     if (playing) {
       stopAmbient();
