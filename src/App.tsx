@@ -122,6 +122,7 @@ export default function App() {
   const globalHoveredElementRef = useRef<HTMLElement | null>(null);
   const globalGestureActivationGateRef = useRef(new GestureActivationGate());
   const globalCursorSmootherRef = useRef(new AirHandCursorSmoother());
+  const globalHandWasDetectedRef = useRef(false);
   const handScrollRef = useRef<{ active: boolean; lastY: number; lastAt: number }>({ active: false, lastY: 0.5, lastAt: 0 });
   const cursorCalibratorRef = useRef<AirHandCursorCalibrator | null>(null);
   const calibratingCursorRef = useRef(false);
@@ -206,6 +207,7 @@ export default function App() {
       const isScrollGesture = hand.detected && hand.gesture === 'Fist' && !hand.pinch;
       const clickStarted = globalGestureActivationGateRef.current.update(hand.detected && !isScrollGesture, hand.detected && hand.pinch && !isScrollGesture);
       if (!hand.detected) {
+        globalHandWasDetectedRef.current = false;
         handScrollRef.current.active = false;
         cursor.classList.remove('global-gesture-scrolling');
         // Tracking loss hides interaction and disarms clicks until a visible release.
@@ -220,6 +222,8 @@ export default function App() {
       const normalizedX = active === 'realityscan' ? 1 - hand.x : hand.x;
       const rawX = clampGesturePointer(normalizedX);
       const rawY = clampGesturePointer(hand.y);
+      if (!globalHandWasDetectedRef.current) globalCursorSmootherRef.current.reset(rawX, rawY);
+      globalHandWasDetectedRef.current = true;
       const smoothed = globalCursorSmootherRef.current.update(rawX, rawY, performance.now());
       const x = clampGesturePointer(smoothed.x);
       const y = clampGesturePointer(smoothed.y);
