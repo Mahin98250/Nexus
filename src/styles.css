@@ -33,7 +33,7 @@
 .holo-canvas{position:absolute;inset:0;display:block;width:100%;height:100%;pointer-events:auto;touch-action:none;cursor:grab;outline:none}image-rendering:auto;
 .holo-canvas:active{cursor:grabbing}
 .holo-scene-hud,.holo-scene-footnote{position:absolute;z-index:4;display:flex;align-items:center;gap:7px;padding:8px 10px;border:1px solid rgba(171,160,255,.23);border-radius:6px;background:rgba(8,10,18,.66);backdrop-filter:blur(10px);font:8px var(--mono);letter-spacing:1px;color:#b8b2e8;pointer-events:none}
-.holo-scene-hud{top:14px;left:14px}
+.holo-scene-hud{top:14px;left:14px}.holo-scene-hud .status-dot.searching{background:#f5c76b;box-shadow:0 0 0 3px rgba(245,199,107,.12);animation:holo-status-pulse 1.3s ease-in-out infinite}@keyframes holo-status-pulse{50%{opacity:.45}}
 .holo-scene-footnote{bottom:14px;right:14px;color:#858ca6;border-color:rgba(171,160,255,.13);font-size:7px}
 .holo-scene-footnote span{color:#83e2d2}
 .holo-scene-unavailable:after{content:'3D graphics are not available in this browser.';position:absolute;left:16px;right:16px;top:50%;text-align:center;font-size:11px;line-height:1.7;color:#c1bddf}
