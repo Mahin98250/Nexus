@@ -5,7 +5,8 @@ import { Activity, AlertTriangle, Camera, HeartPulse, ScanFace, ShieldCheck, Wav
 type Props = { cameraEnabled: boolean; videoRef: RefObject<HTMLVideoElement>; handInputRef: HandInputRef };
 type Sample = { at: number; r: number; g: number; b: number };
 type PulseEstimate = { bpm: number; confidence: number; quality: 'low' | 'fair' | 'good' };
-type SignalMetrics = { variability: number | null; stability: number | null; redMean: number; greenMean: number; blueMean: number; sampleRate: number; motion: 'low' | 'moderate' | 'high' };\ntype EmotionResult = { dominant_emotion: string; emotion_scores: Record<string, number>; face_confidence: number | null; model: string };
+type SignalMetrics = { variability: number | null; stability: number | null; redMean: number; greenMean: number; blueMean: number; sampleRate: number; motion: 'low' | 'moderate' | 'high' };
+type EmotionResult = { dominant_emotion: string; emotion_scores: Record<string, number>; face_confidence: number | null; model: string };
 type FaceBox = { x: number; y: number; width: number; height: number };
 type FaceDetectorLike = { detect: (source: CanvasImageSource) => Promise<Array<{ boundingBox: DOMRectReadOnly }>>; close?: () => void };
 type FaceDetectorConstructor = new (options?: { fastMode?: boolean; maxDetectedFaces?: number }) => FaceDetectorLike;
@@ -87,7 +88,13 @@ export default function BiometricsMonitor({ cameraEnabled, videoRef, handInputRe
   const [quality, setQuality] = useState<'waiting' | 'face-area' | 'lighting' | 'collecting' | 'low-fps' | 'ready'>('waiting');
   const [signalLevel, setSignalLevel] = useState(0);
   const [signalMetrics, setSignalMetrics] = useState<SignalMetrics>({ variability: null, stability: null, redMean: 0, greenMean: 0, blueMean: 0, sampleRate: 0, motion: 'low' });
-  const [showResearchPanel, setShowResearchPanel] = useState(true);\n  const [emotionEndpoint, setEmotionEndpoint] = useState('http://127.0.0.1:8000');\n  const [emotionEnabled, setEmotionEnabled] = useState(false);\n  const [emotionLoading, setEmotionLoading] = useState(false);\n  const [emotionResult, setEmotionResult] = useState<EmotionResult | null>(null);\n  const [emotionError, setEmotionError] = useState('');\n  const emotionRequestRef = useRef(false);
+  const [showResearchPanel, setShowResearchPanel] = useState(true);
+  const [emotionEndpoint, setEmotionEndpoint] = useState('http://127.0.0.1:8000');
+  const [emotionEnabled, setEmotionEnabled] = useState(false);
+  const [emotionLoading, setEmotionLoading] = useState(false);
+  const [emotionResult, setEmotionResult] = useState<EmotionResult | null>(null);
+  const [emotionError, setEmotionError] = useState('');
+  const emotionRequestRef = useRef(false);
   const [faceTracking, setFaceTracking] = useState<'native' | 'fallback' | 'unavailable'>('fallback');
   const [faceFrame, setFaceFrame] = useState({ x: 0.28, y: 0.14, width: 0.44, height: 0.58 });
   const [notes, setNotes] = useState('Sit still, face the camera, and use steady, bright light.');
@@ -281,7 +288,8 @@ export default function BiometricsMonitor({ cameraEnabled, videoRef, handInputRe
         if (!blob) throw new Error('Could not encode a camera frame.');
         const form = new FormData();
         form.append('image', blob, 'vitalsense-frame.jpg');
-        const response = await fetch(url.origin + url.pathname.replace(/\\/$/, '') + '/analyze', { method: 'POST', body: form });
+        const apiBase = url.toString().replace(/\/+$/, '');
+        const response = await fetch(apiBase + '/analyze', { method: 'POST', body: form });
         const payload = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(typeof payload.detail === 'string' ? payload.detail : 'Classifier request failed (' + response.status + ').');
         if (!payload || typeof payload.dominant_emotion !== 'string' || !payload.emotion_scores) throw new Error('The API response did not match the expected DeepFace format.');
@@ -297,7 +305,8 @@ export default function BiometricsMonitor({ cameraEnabled, videoRef, handInputRe
     const timer = window.setInterval(() => { void analyzeFrame(); }, 2500);
     return () => { cancelled = true; window.clearInterval(timer); emotionRequestRef.current = false; setEmotionLoading(false); };
   }, [cameraEnabled, emotionEnabled, emotionEndpoint, videoRef]);
-\n  const statusText = {
+
+  const statusText = {
     waiting: 'READY WHEN YOU ARE', 'face-area': 'CHECK FACE POSITION / MOTION',
     lighting: 'CHECK LIGHTING', collecting: 'COLLECTING SIGNAL',
     'low-fps': 'SIGNAL TOO WEAK', ready: 'EXPERIMENTAL ESTIMATE',
