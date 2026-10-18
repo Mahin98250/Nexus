@@ -217,6 +217,8 @@ export default function App() {
       const isScrollGesture = hand.detected && hand.gesture === 'Fist' && !hand.pinch;
       const clickStarted = globalGestureActivationGateRef.current.update(hand.detected && !isScrollGesture, hand.detected && hand.pinch && !isScrollGesture);
       if (!hand.detected) {
+        handScrollRef.current.active = false;
+        cursor.classList.remove('global-gesture-scrolling');
         // Tracking loss hides interaction and disarms clicks until a visible release.
         // Do not let a held pinch accidentally activate again when the hand reappears.
         cursor.style.visibility = 'hidden';
