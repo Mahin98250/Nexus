@@ -89,9 +89,10 @@ const visionWasmCandidates = [
 ];
 // Some mobile networks can load the camera but block or interrupt Google Cloud Storage.
 // Keep a second model mirror so camera permission success is not mistaken for model success.
+const localHandModelPath = new URL('mediapipe/models/hand_landmarker.task', document.baseURI).toString();
 const handModelCandidates = [
-  // Serve the model from this origin first so mobile networks do not need to reach model CDNs.
-  '/Nexus/mediapipe/models/hand_landmarker.task',
+  // BASE_URL resolves correctly for both Vite root hosting and GitHub Pages' /Nexus/ path.
+  localHandModelPath,
   'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task',
   'https://github.com/sanderdesnaijer/mediapipe-model-mirrors/releases/download/v1/hand_landmarker.task',
 ];
@@ -480,9 +481,25 @@ export default function App() {
           for (const modelAssetPath of handModelCandidates) {
             for (const delegate of ['GPU', 'CPU'] as const) {
               try {
+                let baseOptions: { modelAssetPath: string; delegate: 'GPU' | 'CPU' } | { modelAssetBuffer: Uint8Array; delegate: 'GPU' | 'CPU' };
+                if (modelAssetPath === localHandModelPath) {
+                  // Fetch same-origin bytes explicitly so a missing deployment asset reports its HTTP status,
+                  // instead of surfacing as an opaque browser ResourceEvent inside MediaPipe.
+                  const response = await fetch(modelAssetPath, { cache: 'force-cache' });
+                  if (!response.ok) {
+                    throw new Error(`Bundled hand model request failed: HTTP ${response.status} at ${modelAssetPath}`);
+                  }
+                  const modelBytes = new Uint8Array(await response.arrayBuffer());
+                  if (modelBytes.byteLength < 1_000_000) {
+                    throw new Error(`Bundled hand model is incomplete (${modelBytes.byteLength} bytes)`);
+                  }
+                  baseOptions = { modelAssetBuffer: modelBytes, delegate };
+                } else {
+                  baseOptions = { modelAssetPath, delegate };
+                }
                 handLandmarker = await HandLandmarker.createFromOptions(candidateVision, {
                   ...trackingOptions,
-                  baseOptions: { modelAssetPath, delegate },
+                  baseOptions,
                 });
                 break;
               } catch (error) {
