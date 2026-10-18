@@ -111,6 +111,15 @@ export default function BiometricsMonitor({ cameraEnabled, videoRef, handInputRe
   const lastMotionRef = useRef<{ x: number; y: number } | null>(null);
   const paused = !cameraEnabled || !running;
 
+  // Turning the camera off always revokes the classifier's active consent session.
+  useEffect(() => {
+    if (!cameraEnabled) {
+      setEmotionEnabled(false);
+      setEmotionResult(null);
+      setEmotionError('');
+    }
+  }, [cameraEnabled]);
+
   // Pinch-and-move directly adjusts VitalSense sliders; shared Nexus controls handle button clicks.
   useEffect(() => {
     if (!cameraEnabled) {
