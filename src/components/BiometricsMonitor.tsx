@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
 import type { HandInputRef } from '../vision/types';
-import { Activity, AlertTriangle, Camera, HeartPulse, ScanFace, ShieldCheck, Waves } from 'lucide-react';
+import { Activity, AlertTriangle, Camera, Download, HeartPulse, ScanFace, ShieldCheck, Trash2, Waves } from 'lucide-react';
 
 type Props = { cameraEnabled: boolean; videoRef: RefObject<HTMLVideoElement>; handInputRef: HandInputRef };
 type Sample = { at: number; r: number; g: number; b: number };
@@ -8,6 +8,7 @@ type PulseEstimate = { bpm: number; confidence: number; quality: 'low' | 'fair' 
 type SignalMetrics = { variability: number | null; stability: number | null; redMean: number; greenMean: number; blueMean: number; sampleRate: number; motion: 'low' | 'moderate' | 'high' };
 type EmotionResult = { dominant_emotion: string; emotion_scores: Record<string, number>; face_confidence: number | null; model: string };
 type FaceBox = { x: number; y: number; width: number; height: number };
+type CheckInEntry = { at: string; focus: number; load: number; mood: string; pulseBpm: number | null; signalQuality: string; stability: number | null; sampleRateHz: number };
 type FaceDetectorLike = { detect: (source: CanvasImageSource) => Promise<Array<{ boundingBox: DOMRectReadOnly }>>; close?: () => void };
 type FaceDetectorConstructor = new (options?: { fastMode?: boolean; maxDetectedFaces?: number }) => FaceDetectorLike;
 
@@ -102,6 +103,8 @@ export default function BiometricsMonitor({ cameraEnabled, videoRef, handInputRe
   const [mode, setMode] = useState<'signals' | 'checkin'>('signals');
   const [showGestureGuide, setShowGestureGuide] = useState(false);
   const [mood, setMood] = useState('Neutral');
+  const [checkInHistory, setCheckInHistory] = useState<CheckInEntry[]>([]);
+  const [historyMessage, setHistoryMessage] = useState('');
   const [gestureHint, setGestureHint] = useState('Move your hand pointer over a slider and pinch to adjust it.');
   const previousPinchRef = useRef(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -340,6 +343,44 @@ export default function BiometricsMonitor({ cameraEnabled, videoRef, handInputRe
     return () => { cancelled = true; window.clearInterval(timer); emotionRequestRef.current = false; setEmotionLoading(false); };
   }, [cameraEnabled, emotionEnabled, emotionEndpoint, videoRef]);
 
+  const saveCheckIn = () => {
+    const entry: CheckInEntry = {
+      at: new Date().toISOString(),
+      focus,
+      load,
+      mood,
+      pulseBpm: pulse?.bpm ?? null,
+      signalQuality: pulse?.quality ?? 'not-ready',
+      stability: signalMetrics.stability,
+      sampleRateHz: Number(signalMetrics.sampleRate.toFixed(2)),
+    };
+    setCheckInHistory((history) => [...history, entry].slice(-100));
+    setHistoryMessage('Check-in added to this session only.');
+  };
+
+  const exportCheckIns = () => {
+    if (!checkInHistory.length) return;
+    const columns: Array<keyof CheckInEntry> = ['at', 'focus', 'load', 'mood', 'pulseBpm', 'signalQuality', 'stability', 'sampleRateHz'];
+    const escapeCsv = (value: string | number | null) => {
+      const text = value === null ? '' : String(value);
+      return /[",\n\r]/.test(text) ? '"' + text.replace(/"/g, '""') + '"' : text;
+    };
+    const csv = [columns.join(','), ...checkInHistory.map((entry) => columns.map((column) => escapeCsv(entry[column])).join(','))].join('\r\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = 'vitalsense-session-checkins.csv';
+    anchor.click();
+    URL.revokeObjectURL(url);
+    setHistoryMessage('CSV export prepared from the check-ins in this session.');
+  };
+
+  const clearCheckIns = () => {
+    setCheckInHistory([]);
+    setHistoryMessage('Session check-in history cleared.');
+  };
+
   const statusText = {
     waiting: 'READY WHEN YOU ARE', 'face-area': 'CHECK FACE POSITION / MOTION',
     lighting: 'CHECK LIGHTING', collecting: 'COLLECTING SIGNAL',
@@ -389,7 +430,23 @@ export default function BiometricsMonitor({ cameraEnabled, videoRef, handInputRe
             <label className="bio-mood-label" htmlFor="bio-mood">How would you describe your current mood? (self-reported)</label>
             <select id="bio-mood" value={mood} onChange={(event) => setMood(event.currentTarget.value)}><option>Neutral</option><option>Calm</option><option>Positive</option><option>Tired</option><option>Overwhelmed</option><option>Low</option></select>
             <div className="bio-summary-grid"><div><span>FOCUS · YOUR INPUT</span><strong>{focus}%</strong></div><div><span>LOAD · YOUR INPUT</span><strong>{load}%</strong></div></div>
-            <p className="bio-disclaimer"><ShieldCheck size={14} /> Focus, mental load, and mood are your own check-ins. They stay in component memory and are not saved.</p>
+            <div className="bio-checkin-actions">
+              <button className="button button-primary" onClick={saveCheckIn}>Save check-in to session</button>
+              <button className="button button-secondary" disabled={!checkInHistory.length} onClick={exportCheckIns}><Download size={14} /> Export CSV ({checkInHistory.length})</button>
+              <button className="button button-secondary" disabled={!checkInHistory.length} onClick={clearCheckIns}><Trash2 size={14} /> Clear</button>
+            </div>
+            {historyMessage && <p className="bio-history-message" role="status">{historyMessage}</p>}
+            {checkInHistory.length > 0 && <div className="bio-checkin-history" aria-label="Current session check-in history">
+              <div className="bio-history-heading"><strong>SESSION HISTORY</strong><span>Newest first · max 100 entries</span></div>
+              {[...checkInHistory].reverse().slice(0, 5).map((entry) => <div className="bio-history-row" key={entry.at}>
+                <span>{new Date(entry.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+                <span>Focus <b>{entry.focus}%</b></span>
+                <span>Load <b>{entry.load}%</b></span>
+                <span>{entry.mood}</span>
+                <span>{entry.pulseBpm === null ? 'Pulse —' : 'Pulse ' + entry.pulseBpm + ' BPM'}</span>
+              </div>)}
+            </div>}
+            <p className="bio-disclaimer"><ShieldCheck size={14} /> Focus, mental load, and mood are your own check-ins. History stays in this page's memory until you clear it or leave; export is an explicit local download.</p>
           </section>
         </div>
         <section className="bio-research-panel">
