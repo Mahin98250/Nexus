@@ -211,7 +211,11 @@ export default function BiometricsMonitor({ cameraEnabled, videoRef, handInputRe
         detectionInFlight = true;
         void detector.detect(canvas).then((faces) => {
           if (disposed) return;
-          if (!faces[0]) { faceBox = null; return; }
+          if (!faces[0]) {
+            faceBox = null;
+            setFaceTracking('fallback');
+            return;
+          }
           const box = faces[0].boundingBox;
           const nx = box.x / width, ny = box.y / height;
           const nw = box.width / width, nh = box.height / height;
@@ -219,8 +223,17 @@ export default function BiometricsMonitor({ cameraEnabled, videoRef, handInputRe
             faceBox = faceBox
               ? { x: faceBox.x * 0.7 + nx * 0.3, y: faceBox.y * 0.7 + ny * 0.3, width: faceBox.width * 0.7 + nw * 0.3, height: faceBox.height * 0.7 + nh * 0.3 }
               : { x: nx, y: ny, width: nw, height: nh };
-          } else faceBox = null;
-        }).catch(() => { detector = null; }).finally(() => { detectionInFlight = false; });
+            setFaceTracking('native');
+          } else {
+            faceBox = null;
+            setFaceTracking('fallback');
+          }
+        }).catch(() => {
+          detector?.close?.();
+          detector = null;
+          faceBox = null;
+          setFaceTracking('fallback');
+        }).finally(() => { detectionInFlight = false; });
       }
       if (frameCount % 8 === 0) {
         setFaceFrame(faceBox ?? { x: 0.28, y: 0.14, width: 0.44, height: 0.58 });
@@ -235,7 +248,15 @@ export default function BiometricsMonitor({ cameraEnabled, videoRef, handInputRe
       const top = Math.max(0, Math.floor((box.y + box.height * 0.22) * height));
       const bottom = Math.min(height, Math.ceil((box.y + box.height * 0.54) * height));
       if (right <= left || bottom <= top) { setQuality('face-area'); return; }
-      const pixels = context.getImageData(left, top, right - left, bottom - top).data;
+      let pixels: Uint8ClampedArray;
+      try {
+        pixels = context.getImageData(left, top, right - left, bottom - top).data;
+      } catch {
+        setQuality('lighting');
+        setNotes('Camera pixels could not be read. Check browser permissions and reload the camera session.');
+        setPulse(null);
+        return;
+      }
       let red = 0, green = 0, blue = 0, count = 0;
       for (let index = 0; index < pixels.length; index += 4) {
         red += pixels[index]; green += pixels[index + 1]; blue += pixels[index + 2]; count += 1;
@@ -372,7 +393,7 @@ export default function BiometricsMonitor({ cameraEnabled, videoRef, handInputRe
     anchor.href = url;
     anchor.download = 'vitalsense-session-checkins.csv';
     anchor.click();
-    URL.revokeObjectURL(url);
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
     setHistoryMessage('CSV export prepared from the check-ins in this session.');
   };
 
@@ -408,7 +429,7 @@ export default function BiometricsMonitor({ cameraEnabled, videoRef, handInputRe
         {cameraEnabled && <div className="bio-gesture-feedback"><span className={handInputRef.current.detected ? 'status-dot active' : 'status-dot'} /> {gestureHint}</div>}
         {!cameraEnabled && <div className="bio-callout"><Camera size={18} /><div><strong>Camera is off</strong><span>Enable the camera using the control above. Nothing starts automatically.</span></div></div>}
         {cameraEnabled && <div className="bio-consent-note"><ShieldCheck size={15} /> Camera frames are sampled in this tab. Raw video and samples are not saved or uploaded.</div>}
-        {cameraEnabled && <div className="bio-controls"><button className="button button-primary" onClick={() => setRunning((value) => !value)}>{running ? 'Pause signal sampling' : 'Start signal sampling'}</button><span>Sampling is off until you start it.</span></div>}
+        {cameraEnabled && <div className="bio-controls"><button className="button button-primary" onClick={() => setRunning((value) => !value)}>{running ? 'Pause signal sampling' : 'Start signal sampling'}</button><span>{running ? 'Sampling is active while the camera feed is ready.' : 'Sampling is paused. Start it to collect a pulse candidate.'}</span></div>}
         <div className={"biometrics-grid " + (mode === "checkin" ? "bio-checkin-mode" : "bio-signals-mode")}>
           <section className="bio-panel bio-pulse-panel">
             <div className="bio-panel-top"><span><HeartPulse size={15} /> rPPG / PULSE</span><span>RGB · SPECTRUM CANDIDATE</span></div>
