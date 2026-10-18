@@ -79,7 +79,7 @@ const experiences: Experience[] = [
 ];
 
 // Keep the JavaScript runtime and WASM assets pinned to the exact release used by AirHand.
-const mediaPipeRuntimeVersion = '0.10.22-rc.20250304';
+const mediaPipeRuntimeVersion = '0.10.22';
 const mediaPipeBundleCandidates = [
   `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${mediaPipeRuntimeVersion}/vision_bundle.mjs`,
   `https://unpkg.com/@mediapipe/tasks-vision@${mediaPipeRuntimeVersion}/vision_bundle.mjs`,
@@ -479,9 +479,9 @@ export default function App() {
       const trackingOptions = {
         runningMode: 'VIDEO' as const,
         numHands: 2,
-        minHandDetectionConfidence: 0.55,
-        minHandPresenceConfidence: 0.55,
-        minTrackingConfidence: 0.55,
+        minHandDetectionConfidence: 0.45,
+        minHandPresenceConfidence: 0.45,
+        minTrackingConfidence: 0.45,
       };
       if (trackHands) {
         // Use the same trained GestureRecognizer-first strategy as AirHand's browser app.
@@ -490,9 +490,9 @@ export default function App() {
         const gestureOptions = {
           runningMode: 'VIDEO' as const,
           numHands: 2,
-          minHandDetectionConfidence: 0.62,
-          minHandPresenceConfidence: 0.60,
-          minTrackingConfidence: 0.60,
+          minHandDetectionConfidence: 0.48,
+          minHandPresenceConfidence: 0.48,
+          minTrackingConfidence: 0.48,
         };
         let recognizer: GestureRecognizer | null = null;
         let gestureModelError: unknown = null;
