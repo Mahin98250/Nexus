@@ -4,6 +4,9 @@ import { Activity, AlertTriangle, Camera, HeartPulse, ShieldCheck, Waves } from 
 type Props = { cameraEnabled: boolean; videoRef: RefObject<HTMLVideoElement> };
 type Sample = { at: number; r: number; g: number; b: number };
 type PulseEstimate = { bpm: number; confidence: number; quality: 'low' | 'fair' | 'good' };
+type FaceBox = { x: number; y: number; width: number; height: number };
+type FaceDetectorLike = { detect: (source: CanvasImageSource) => Promise<Array<{ boundingBox: DOMRectReadOnly }>>; close?: () => void };
+type FaceDetectorConstructor = new (options?: { fastMode?: boolean; maxDetectedFaces?: number }) => FaceDetectorLike;
 
 const SAMPLE_WINDOW_MS = 12_000;
 const MIN_SIGNAL_MS = 8_000;
@@ -86,13 +89,14 @@ export default function BiometricsMonitor({ cameraEnabled, videoRef }: Props) {
     }
 
     let disposed = false;
-    let detector: FaceDetector | null = null;
+    let detector: FaceDetectorLike | null = null;
     try {
-      if ('FaceDetector' in window) detector = new FaceDetector({ fastMode: true, maxDetectedFaces: 1 });
+      const Detector = (window as Window & { FaceDetector?: FaceDetectorConstructor }).FaceDetector;
+      if (Detector) detector = new Detector({ fastMode: true, maxDetectedFaces: 1 });
     } catch { detector = null; }
     let detectionInFlight = false;
     let frameCount = 0;
-    let faceBox: { x: number; y: number; width: number; height: number } | null = null;
+    let faceBox: FaceBox | null = null;
     const canvas = canvasRef.current;
     const context = canvas?.getContext('2d', { willReadFrequently: true }) ?? null;
 
@@ -109,7 +113,8 @@ export default function BiometricsMonitor({ cameraEnabled, videoRef }: Props) {
       if (detector && !detectionInFlight && frameCount % 8 === 0) {
         detectionInFlight = true;
         void detector.detect(canvas).then((faces) => {
-          if (disposed || !faces[0]) return;
+          if (disposed) return;
+          if (!faces[0]) { faceBox = null; return; }
           const box = faces[0].boundingBox;
           const nx = box.x / width, ny = box.y / height;
           const nw = box.width / width, nh = box.height / height;
@@ -120,7 +125,7 @@ export default function BiometricsMonitor({ cameraEnabled, videoRef }: Props) {
           } else faceBox = null;
         }).catch(() => { detector = null; }).finally(() => { detectionInFlight = false; });
       }
-      if (faceBox) setFaceFrame(faceBox);
+      if (frameCount % 8 === 0) setFaceFrame(faceBox ?? { x: 0.28, y: 0.14, width: 0.44, height: 0.58 });
 
       if (now - lastSampleAtRef.current < 75) return;
       lastSampleAtRef.current = now;
@@ -166,7 +171,7 @@ export default function BiometricsMonitor({ cameraEnabled, videoRef }: Props) {
       disposed = true;
       if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
       frameRef.current = null;
-      if (detector && 'close' in detector && typeof detector.close === 'function') detector.close();
+      detector?.close?.();
     };
   }, [paused, videoRef]);
 
