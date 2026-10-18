@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type RefObject } from 'react';
 import { Activity, AlertTriangle, Camera, HeartPulse, ShieldCheck, Waves } from 'lucide-react';
 
-type Props = { cameraEnabled: boolean; videoRef: React.RefObject<HTMLVideoElement> };
+type Props = { cameraEnabled: boolean; videoRef: RefObject<HTMLVideoElement> };
 type Sample = { at: number; r: number; g: number; b: number };
 type PulseEstimate = { bpm: number; confidence: number; quality: 'low' | 'fair' | 'good' };
 
@@ -186,6 +186,7 @@ export default function BiometricsMonitor({ cameraEnabled, videoRef }: Props) {
         </div>
         {!cameraEnabled && <div className="bio-callout"><Camera size={18} /><div><strong>Camera is off</strong><span>Enable the camera using the control above. Nothing starts automatically.</span></div></div>}
         {cameraEnabled && <div className="bio-consent-note"><ShieldCheck size={15} /> Camera frames are sampled in this tab. Raw video and samples are not saved or uploaded.</div>}
+        {cameraEnabled && <div className="bio-controls"><button className="button button-primary" onClick={() => setRunning((value) => !value)}>{running ? 'Pause signal sampling' : 'Start signal sampling'}</button><span>Sampling is off until you start it.</span></div>}
         <div className="biometrics-grid">
           <section className="bio-panel bio-pulse-panel">
             <div className="bio-panel-top"><span><HeartPulse size={15} /> rPPG / PULSE</span><span>RGB · SPECTRUM CANDIDATE</span></div>
