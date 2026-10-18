@@ -4,6 +4,7 @@ import {
   Hand, HeartPulse, Layers3, Maximize2, Monitor, Move3D, Play, ScanLine,
   Settings2, ShieldCheck, Sparkles, Target, X, Sun, Moon,
 } from 'lucide-react';
+import { FilesetResolver } from '@mediapipe/tasks-vision';
 import type { HandLandmarker, PoseLandmarker } from '@mediapipe/tasks-vision';
 import ShadowStrikeGame from './components/ShadowStrikeGame';
 import AirOSDesktop from './components/AirOSDesktop';
@@ -80,10 +81,6 @@ const experiences: Experience[] = [
 
 // Keep the JavaScript runtime and WASM assets pinned to the exact release used by AirHand.
 const mediaPipeRuntimeVersion = '0.10.22';
-const mediaPipeBundleCandidates = [
-  `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${mediaPipeRuntimeVersion}/vision_bundle.mjs`,
-  `https://unpkg.com/@mediapipe/tasks-vision@${mediaPipeRuntimeVersion}/vision_bundle.mjs`,
-];
 const visionWasmCandidates = [
   `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${mediaPipeRuntimeVersion}/wasm`,
   `https://unpkg.com/@mediapipe/tasks-vision@${mediaPipeRuntimeVersion}/wasm`,
@@ -434,22 +431,7 @@ export default function App() {
       }
 
       setCameraStatus(active === 'shadowstrike' ? 'Loading pose-tracking model…' : 'Loading hand-tracking model…');
-      let mediaPipeModule: typeof import('@mediapipe/tasks-vision') | null = null;
-      let bundleError: unknown = null;
-      for (const bundleUrl of mediaPipeBundleCandidates) {
-        try {
-          // @vite-ignore keeps this exact versioned browser bundle external, like AirHand.
-          mediaPipeModule = await import(/* @vite-ignore */ bundleUrl) as typeof import('@mediapipe/tasks-vision');
-          break;
-        } catch (error) {
-          bundleError = error;
-        }
-      }
-      if (!mediaPipeModule) {
-        const details = getRuntimeErrorDetails(bundleError);
-        throw new Error(`MediaPipe JavaScript bundle failed to load from both CDNs (${details.name ? details.name + ': ' : ''}${details.message}). Check the connection or content blocker and retry.`);
-      }
-      const FilesetResolver = mediaPipeModule.FilesetResolver;
+      // Import the vision runtime from the app's own npm bundle; do not depend on a CDN for JavaScript.
       let vision: Awaited<ReturnType<typeof FilesetResolver.forVisionTasks>> | null = null;
       let wasmError: unknown = null;
       for (const wasmRoot of visionWasmCandidates) {
@@ -486,7 +468,7 @@ export default function App() {
         for (const modelAssetPath of handModelCandidates) {
           for (const delegate of ['GPU', 'CPU'] as const) {
             try {
-              handLandmarker = await mediaPipeModule.HandLandmarker.createFromOptions(vision, {
+              handLandmarker = await (await import('@mediapipe/tasks-vision')).HandLandmarker.createFromOptions(vision, {
                 ...trackingOptions,
                 baseOptions: { modelAssetPath, delegate },
               });
@@ -525,7 +507,7 @@ export default function App() {
         for (const modelAssetPath of poseModelCandidates) {
           for (const delegate of ['GPU', 'CPU'] as const) {
             try {
-              poseLandmarker = await mediaPipeModule.PoseLandmarker.createFromOptions(vision, {
+              poseLandmarker = await (await import('@mediapipe/tasks-vision')).PoseLandmarker.createFromOptions(vision, {
                 ...poseOptions,
                 baseOptions: { modelAssetPath, delegate },
               });
