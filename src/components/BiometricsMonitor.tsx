@@ -410,9 +410,12 @@ export default function BiometricsMonitor({ cameraEnabled, videoRef, handInputRe
               <label className="bio-mood-label" htmlFor="bio-emotion-endpoint">Classifier API endpoint</label>
               <input id="bio-emotion-endpoint" className="bio-emotion-endpoint" value={emotionEndpoint} onChange={(event) => setEmotionEndpoint(event.currentTarget.value)} disabled={emotionEnabled} spellCheck={false} />
               <div className="bio-emotion-actions">
-                <button className="button button-primary" disabled={!cameraEnabled || emotionLoading && !emotionEnabled} onClick={() => { setEmotionError(''); setEmotionResult(null); setEmotionEnabled((value) => !value); }}>{emotionEnabled ? 'Stop classifier' : 'I consent · Start expression analysis'}</button>
+                <button className="button button-secondary" disabled={emotionApiStatus === 'checking'} onClick={() => void testEmotionApi()}>{emotionApiStatus === 'checking' ? 'Testing API…' : 'Test API connection'}</button>
+                <span className={'bio-emotion-state ' + (emotionApiStatus === 'online' ? 'active' : '')}>{emotionApiStatus === 'online' ? 'API ONLINE' : emotionApiStatus === 'offline' ? 'API OFFLINE' : 'API NOT TESTED'}</span>
+                <button className="button button-primary" disabled={!cameraEnabled || (emotionLoading && !emotionEnabled)} onClick={() => { setEmotionError(''); setEmotionResult(null); setEmotionEnabled((value) => !value); }}>{emotionEnabled ? 'Stop classifier' : 'I consent · Start expression analysis'}</button>
                 {emotionLoading && <span>Analyzing frame…</span>}
               </div>
+              <p className="bio-emotion-message">The public GitHub Pages site does not run Python inference. For local testing, start the included DeepFace API on this computer; for public use, configure a trusted HTTPS API endpoint.</p>
               {!cameraEnabled && <p className="bio-emotion-message">Enable the camera before starting expression analysis.</p>}
               {emotionError && <p className="bio-emotion-error" role="alert">{emotionError} Check that the API is running and allows this website in its CORS settings.</p>}
               {emotionResult && <div className="bio-emotion-result" aria-live="polite">
