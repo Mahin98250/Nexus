@@ -387,3 +387,32 @@
 .theme-light .bio-mood-label{color:#53617f}
 .theme-light #bio-mood{background:#fff;color:#26324e}
 @media(max-width:520px){.bio-modebar{align-items:stretch}.bio-modebar button{flex:1}.bio-modebar .bio-manual-trigger{margin-left:0}}
+
+
+/* VitalSense research metrics: descriptive camera-signal features only. */
+.bio-research-panel{border:1px solid rgba(249,168,212,.16);border-radius:12px;background:rgba(249,168,212,.025);overflow:hidden}
+.bio-research-toggle{width:100%;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px;border:0;background:transparent;color:#f2c4de;font:9px var(--mono);letter-spacing:.8px;text-align:left}
+.bio-research-toggle>span{display:flex;align-items:center;gap:8px}
+.bio-research-toggle>span:last-child{color:#9da8c4;white-space:nowrap}
+.bio-research-content{padding:0 16px 16px}
+.bio-research-content>.bio-explainer{margin:0 0 13px}
+.bio-research-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.bio-research-grid>div{min-width:0;display:flex;flex-direction:column;gap:7px;padding:12px;border:1px solid rgba(180,190,255,.1);border-radius:9px;background:rgba(255,255,255,.025)}
+.bio-research-grid span,.bio-rgb-strip>span{font:8px var(--mono);letter-spacing:.4px;color:#9ba8c7}
+.bio-research-grid strong{font-size:18px;color:#f9a8d4;overflow-wrap:anywhere}
+.bio-research-grid small{font-size:9px;line-height:1.5;color:#8794b6}
+.bio-rgb-strip{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:14px}
+.bio-rgb-strip>span{grid-column:1/-1}
+.bio-rgb-strip>div{position:relative;display:flex;align-items:center;gap:8px;min-width:0;height:27px;padding:0 8px;border:1px solid rgba(180,190,255,.1);border-radius:6px;background:rgba(255,255,255,.03);overflow:hidden}
+.bio-rgb-strip i{position:absolute;left:0;top:0;bottom:0;opacity:.18;pointer-events:none}
+.bio-rgb-strip b{position:relative;font:9px var(--mono);color:#e6e9f8}
+.bio-method-note{margin-top:12px;padding:12px;border-left:2px solid rgba(249,168,212,.5);background:rgba(249,168,212,.035)}
+.bio-method-note strong{font-size:10px;color:#f2c4de}
+.bio-method-note p{margin:5px 0 0;font-size:10px;line-height:1.7;color:#a6b0cb}
+.theme-light .bio-research-panel{background:rgba(67,77,127,.025);border-color:rgba(67,77,127,.14)}
+.theme-light .bio-research-toggle,.theme-light .bio-method-note strong{color:#7b2856}
+.theme-light .bio-research-grid>div,.theme-light .bio-rgb-strip>div{background:rgba(67,77,127,.025);border-color:rgba(67,77,127,.12)}
+.theme-light .bio-research-grid span,.theme-light .bio-research-grid small,.theme-light .bio-method-note p,.theme-light .bio-rgb-strip b{color:#586583}
+.theme-light .bio-method-note{background:rgba(249,168,212,.07)}
+@media(max-width:900px){.bio-research-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:520px){.bio-research-content{padding:0 12px 12px}.bio-research-toggle{align-items:flex-start;font-size:8px;padding:12px}.bio-research-grid{grid-template-columns:1fr 1fr}.bio-research-grid>div{padding:10px}.bio-rgb-strip{grid-template-columns:1fr}.bio-rgb-strip>span{grid-column:auto}}
