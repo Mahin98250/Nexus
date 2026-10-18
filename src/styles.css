@@ -416,3 +416,37 @@
 .theme-light .bio-method-note{background:rgba(249,168,212,.07)}
 @media(max-width:900px){.bio-research-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:520px){.bio-research-content{padding:0 12px 12px}.bio-research-toggle{align-items:flex-start;font-size:8px;padding:12px}.bio-research-grid{grid-template-columns:1fr 1fr}.bio-research-grid>div{padding:10px}.bio-rgb-strip{grid-template-columns:1fr}.bio-rgb-strip>span{grid-column:auto}}
+
+
+/* VitalSense optional DeepFace expression classifier */
+.bio-emotion-module{border-left-color:rgba(249,168,212,.7)}
+.bio-emotion-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.bio-emotion-heading>strong{display:flex;align-items:center;gap:7px}
+.bio-emotion-state{padding:4px 7px;border:1px solid rgba(180,190,255,.16);border-radius:99px;color:#aeb8d5;font:8px var(--mono);letter-spacing:.5px}
+.bio-emotion-state.active{color:#92e8c1;border-color:rgba(146,232,193,.3);background:rgba(146,232,193,.06)}
+.bio-emotion-endpoint{display:block;width:100%;margin:7px 0 10px;padding:10px 11px;border:1px solid rgba(249,168,212,.2);border-radius:8px;background:rgba(4,9,22,.45);color:#e6e9f8;font:10px var(--mono)}
+.bio-emotion-endpoint:disabled{opacity:.65}
+.bio-emotion-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px}
+.bio-emotion-actions button{font-size:10px}
+.bio-emotion-actions button:disabled{opacity:.5;cursor:not-allowed}
+.bio-emotion-actions>span{font-size:10px;color:#9ba8c7}
+.bio-emotion-message,.bio-emotion-error{font-size:10px;line-height:1.6;margin:10px 0 0}
+.bio-emotion-message{color:#aeb8d5}
+.bio-emotion-error{color:#ffb1b1;padding:9px 10px;border:1px solid rgba(255,120,120,.25);border-radius:8px;background:rgba(255,100,100,.05)}
+.bio-emotion-result{display:grid;gap:12px;margin-top:14px;padding:13px;border:1px solid rgba(146,232,193,.2);border-radius:10px;background:rgba(146,232,193,.035)}
+.bio-emotion-result>div:first-child{display:grid;gap:5px}
+.bio-emotion-result>div:first-child>span{font:8px var(--mono);color:#9ba8c7;letter-spacing:.5px}
+.bio-emotion-result>div:first-child>strong{font-size:22px;color:#f9a8d4;text-transform:capitalize}
+.bio-emotion-result>div:first-child>small{font-size:9px;color:#8996b6}
+.bio-emotion-scores{display:grid;gap:8px}
+.bio-emotion-scores>div{display:grid;grid-template-columns:82px minmax(30px,1fr) 38px;align-items:center;gap:8px}
+.bio-emotion-scores>div>span{font-size:10px;color:#c4cce3;text-transform:capitalize}
+.bio-emotion-scores>div>div{height:5px;overflow:hidden;border-radius:99px;background:rgba(255,255,255,.08)}
+.bio-emotion-scores>div>div>i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,#b278e0,#f9a8d4)}
+.bio-emotion-scores>div>b{text-align:right;font:9px var(--mono);color:#f9a8d4}
+.theme-light .bio-emotion-endpoint{background:#fff;color:#26324e;border-color:rgba(67,77,127,.18)}
+.theme-light .bio-emotion-state{color:#53617f}
+.theme-light .bio-emotion-result{background:rgba(67,77,127,.025);border-color:rgba(67,77,127,.15)}
+.theme-light .bio-emotion-result>div:first-child>span,.theme-light .bio-emotion-result>div:first-child>small{color:#586583}
+.theme-light .bio-emotion-scores>div>span{color:#53617f}
+@media(max-width:520px){.bio-emotion-actions button{width:100%}.bio-emotion-scores>div{grid-template-columns:70px minmax(30px,1fr) 34px}}
