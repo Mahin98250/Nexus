@@ -168,25 +168,6 @@ export default function App() {
     const scrollAtPoint = (x: number, y: number, delta: number) => {
       if (!Number.isFinite(delta) || Math.abs(delta) < 1) return;
       const hit = document.elementFromPoint(x * window.innerWidth, y * window.innerHeight) as HTMLElement | null;
-      if (isScrollGesture) {
-        cursor.style.visibility = 'visible';
-        cursor.style.left = (x * 100) + 'vw';
-        cursor.style.top = (y * 100) + 'vh';
-        cursor.classList.remove('global-gesture-pinching');
-        cursor.classList.add('global-gesture-scrolling');
-        clearHover();
-        const scrollState = handScrollRef.current;
-        const now = performance.now();
-        if (scrollState.active && now - scrollState.lastAt < 120) {
-          const delta = (scrollState.lastY - y) * window.innerHeight * 1.35;
-          scrollAtPoint(x, y, delta);
-        }
-        handScrollRef.current = { active: true, lastY: y, lastAt: now };
-        frame = requestAnimationFrame(tick);
-        return;
-      }
-      handScrollRef.current.active = false;
-      cursor.classList.remove('global-gesture-scrolling');
       let node: HTMLElement | null = hit;
       while (node && node !== document.body && node !== document.documentElement) {
         const style = window.getComputedStyle(node);
@@ -235,6 +216,25 @@ export default function App() {
       const x = clampGesturePointer(smoothed.x);
       const y = clampGesturePointer(smoothed.y);
       const hit = document.elementFromPoint(x * window.innerWidth, y * window.innerHeight) as HTMLElement | null;
+      if (isScrollGesture) {
+        cursor.style.visibility = 'visible';
+        cursor.style.left = (x * 100) + 'vw';
+        cursor.style.top = (y * 100) + 'vh';
+        cursor.classList.remove('global-gesture-pinching');
+        cursor.classList.add('global-gesture-scrolling');
+        clearHover();
+        const scrollState = handScrollRef.current;
+        const now = performance.now();
+        if (scrollState.active && now - scrollState.lastAt < 120) {
+          const delta = (scrollState.lastY - y) * window.innerHeight * 1.35;
+          scrollAtPoint(x, y, delta);
+        }
+        handScrollRef.current = { active: true, lastY: y, lastAt: now };
+        frame = requestAnimationFrame(tick);
+        return;
+      }
+      handScrollRef.current.active = false;
+      cursor.classList.remove('global-gesture-scrolling');
       // AirOS draws its own low-latency cursor inside the desktop surface. Keep
       // that cursor exclusive there, but allow the global cursor to operate the
       // workspace toolbar and camera controls outside the desktop.
