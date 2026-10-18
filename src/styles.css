@@ -450,3 +450,50 @@
 .theme-light .bio-emotion-result>div:first-child>span,.theme-light .bio-emotion-result>div:first-child>small{color:#586583}
 .theme-light .bio-emotion-scores>div>span{color:#53617f}
 @media(max-width:520px){.bio-emotion-actions button{width:100%}.bio-emotion-scores>div{grid-template-columns:70px minmax(30px,1fr) 34px}}
+
+
+/* Runtime recovery + viewport fit: keep the experience usable on desktop and mobile. */
+html,body,#root{width:100%;min-width:320px;min-height:100%;margin:0}
+body{overflow-x:hidden}
+.app-shell{width:100%;max-width:100%;min-height:100dvh;overflow-x:clip}
+.home,.workspace{width:100%;max-width:1440px;min-width:0;margin-inline:auto}
+.workspace{padding-bottom:max(24px,env(safe-area-inset-bottom))}
+.workspace-grid{grid-template-columns:minmax(0,1fr) minmax(250px,290px);align-items:start}
+.workspace-main,.camera-panel,.camera-stage,.biometrics-layout,.biometrics-main{min-width:0;max-width:100%}
+.camera-stage{height:clamp(280px,44vh,510px);min-height:280px}
+.camera-video{max-width:100%;object-fit:cover}
+.biometrics-layout{overflow-wrap:anywhere}
+.biometrics-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+.bio-panel,.bio-research-panel,.bio-method-note{min-width:0;max-width:100%}
+.bio-research-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+.bio-emotion-endpoint{min-width:0;max-width:100%}
+@media(max-width:1000px){
+  .home,.workspace{padding-left:clamp(14px,3vw,28px);padding-right:clamp(14px,3vw,28px)}
+  .workspace-grid{grid-template-columns:minmax(0,1fr)}
+  .inspector{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0}
+  .inspector-title{grid-column:1/-1}
+  .inspector-section{min-width:0}
+  .camera-stage{height:clamp(260px,52vh,480px)}
+}
+@media(max-width:600px){
+  .topbar{height:60px;padding-inline:14px}
+  .brand{font-size:14px;letter-spacing:1.5px}
+  .brand-beta,.connection-pill{display:none}
+  .home,.workspace{padding-left:12px;padding-right:12px}
+  .workspace-heading{align-items:flex-start;gap:12px;flex-direction:column}
+  .workspace-heading h1{font-size:clamp(28px,8vw,42px);letter-spacing:-1.5px}
+  .workspace-actions{width:100%;flex-wrap:wrap}
+  .workspace-actions .button{flex:1}
+  .camera-stage{height:clamp(230px,42vh,360px);min-height:230px}
+  .camera-footer{gap:8px;align-items:flex-start;padding:10px;flex-wrap:wrap}
+  .camera-status{max-width:100%;overflow-wrap:anywhere}
+  .inspector{display:block}
+  .biometrics-layout{padding:10px}
+  .biometrics-banner{padding:14px;gap:10px}
+  .biometrics-banner h2{font-size:clamp(22px,6vw,30px)}
+  .biometrics-grid{grid-template-columns:minmax(0,1fr)}
+  .bio-research-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .bio-modebar{display:grid;grid-template-columns:1fr}
+  .bio-modebar .bio-manual-trigger{margin-left:0}
+  .bio-summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}

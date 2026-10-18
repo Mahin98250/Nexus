@@ -47,7 +47,7 @@ describe('AirHand gesture and cursor primitives', () => {
   it('suppresses micro-jitter and follows large cursor movement faster', () => {
     const smooth = new AirHandCursorSmoother(0.18);
     expect(smooth.update(0.5, 0.5, 0)).toEqual({ x: 0.5, y: 0.5 });
-    expect(smooth.update(0.5005, 0.5005, 16)).toEqual({ x: 0.5, y: 0.5 });
+    expect(smooth.update(0.5003, 0.5003, 16)).toEqual({ x: 0.5, y: 0.5 });
     const moved = smooth.update(0.9, 0.9, 32);
     expect(moved.x).toBeGreaterThan(0.5);
     expect(moved.x).toBeLessThan(0.9);

@@ -1,5 +1,5 @@
 import type { HandInput, Landmark } from './types';
-import { detectAirHandGesture, clamp, distance2D, mapCalibratedCursor } from './airHandEngine';
+import { detectAirHandGesture, clamp, distance2D } from './airHandEngine';
 
 export function deriveHandInput(
   landmarks: readonly Landmark[] | undefined,
@@ -26,19 +26,16 @@ export function deriveHandInput(
   const indexTip = landmarks[8];
   const normalizedX = clamp(1 - indexTip.x, 0, 1);
   const normalizedY = clamp(indexTip.y, 0, 1);
-  // Use AirHand's safe default calibration when the user hasn't run guided calibration.
-  // This makes the comfortable central camera range span the full interaction area.
-  const mappedCursor = mapCalibratedCursor(normalizedX, normalizedY, {
-    minX: 0.08, maxX: 0.92, minY: 0.08, maxY: 0.92,
-  });
   const fingerSpread = [8, 12, 16, 20]
     .reduce((sum, index) => sum + distance2D(wrist, landmarks[index]), 0) / 4 / palmScale;
   const gesture = detectAirHandGesture(landmarks, previousPinch, modelCategory, modelScore);
 
   return {
     detected: true,
-    x: mappedCursor?.x ?? normalizedX,
-    y: mappedCursor?.y ?? normalizedY,
+    // Keep source coordinates raw here. App applies either the default mapping or
+    // learned calibration exactly once, after collecting calibration samples.
+    x: normalizedX,
+    y: normalizedY,
     // Use AirHand's palm-normalized pinch thresholds (0.28 press / 0.43 release).
     pinch: gesture.gesture === 'Pinch',
     openness: clamp((fingerSpread - 1.0) / 1.55, 0, 1),
