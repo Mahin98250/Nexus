@@ -11,7 +11,7 @@ import RealityScanOverlay from './components/RealityScanOverlay';
 import HoloDeskScene from './components/HoloDeskScene';
 import { deriveHandInput } from './vision/gestures';
 import { deriveBodyInput } from './vision/bodyGestures';
-import { AirHandCursorSmoother, AirHandGestureStabilizer, type AirHandGesture } from './vision/airHandEngine';
+import { AirHandCursorCalibrator, AirHandCursorSmoother, AirHandGestureStabilizer, mapCalibratedCursor, validateCursorBounds, type AirHandCursorBounds, type AirHandGesture } from './vision/airHandEngine';
 import { getRuntimeErrorDetails } from './vision/runtimeErrors';
 import { clampGesturePointer, GestureActivationGate } from './vision/gestureNavigation';
 import { EMPTY_BODY_INPUT, EMPTY_HAND_INPUT, type BodyInput, type HandInput, type Landmark } from './vision/types';
@@ -103,6 +103,8 @@ export default function App() {
   const [handCount, setHandCount] = useState(0);
   const [fps, setFps] = useState(0);
   const [showHelp, setShowHelp] = useState(false);
+  const [calibratingCursor, setCalibratingCursor] = useState(false);
+  const [calibrationMessage, setCalibrationMessage] = useState('Not calibrated');
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
     try { return localStorage.getItem('nexus-theme') === 'light' ? 'light' : 'dark'; }
     catch { return 'dark'; }
@@ -112,6 +114,10 @@ export default function App() {
   const globalHoveredElementRef = useRef<HTMLElement | null>(null);
   const globalGestureActivationGateRef = useRef(new GestureActivationGate());
   const globalCursorSmootherRef = useRef(new AirHandCursorSmoother());
+  const cursorCalibratorRef = useRef<AirHandCursorCalibrator | null>(null);
+  const calibratingCursorRef = useRef(false);
+  const cursorBoundsRef = useRef<AirHandCursorBounds | null>(null);
+  const calibrationSamplesRef = useRef(0);
   const bodyInputRef = useRef<BodyInput>({ ...EMPTY_BODY_INPUT });
   const videoRef = useRef<HTMLVideoElement>(null);
   const gestureRecognizerRef = useRef<GestureRecognizer | null>(null);
@@ -131,8 +137,23 @@ export default function App() {
   const frameCountRef = useRef(0);
   const activeExperience = experiences.find((item) => item.id === active) ?? null;
 
+  const startCursorCalibration = useCallback(() => {
+    cursorCalibratorRef.current = new AirHandCursorCalibrator(30, 0.18, 0.035);
+    calibrationSamplesRef.current = 0;
+    setCalibrationMessage('Move your hand slowly across the full camera view…');
+    calibratingCursorRef.current = true;
+    setCalibratingCursor(true);
+  }, []);
+
   useEffect(() => {
-    try { localStorage.setItem('nexus-theme', theme); } catch { /* storage may be unavailable */ }
+    try {
+      localStorage.setItem('nexus-theme', theme);
+      const stored = localStorage.getItem('nexus-cursor-bounds');
+      if (stored) {
+        const bounds = JSON.parse(stored) as AirHandCursorBounds;
+        if (validateCursorBounds(bounds)) cursorBoundsRef.current = bounds;
+      }
+    } catch { /* local storage may be unavailable */ }
   }, [theme]);
 
   useEffect(() => {
@@ -591,6 +612,29 @@ export default function App() {
           ...handInputRef.current,
           pinch: handInputRef.current.detected && stableGesture === 'Pinch',
         };
+        // Sample raw coordinates so the calibration never trains on its own output.
+        if (calibratingCursorRef.current && handInputRef.current.detected && cursorCalibratorRef.current) {
+          cursorCalibratorRef.current.add(handInputRef.current.x, handInputRef.current.y);
+          calibrationSamplesRef.current += 1;
+          if (calibrationSamplesRef.current >= 60) {
+            const bounds = cursorCalibratorRef.current.finish();
+            cursorCalibratorRef.current = null;
+            calibratingCursorRef.current = false;
+            setCalibratingCursor(false);
+            if (bounds) {
+              cursorBoundsRef.current = bounds;
+              try { localStorage.setItem('nexus-cursor-bounds', JSON.stringify(bounds)); } catch { /* keep bounds for this session */ }
+              setCalibrationMessage('Calibrated · saved on this device');
+            } else {
+              setCalibrationMessage('Move farther in both directions and try again.');
+            }
+          }
+        }
+        const bounds = cursorBoundsRef.current;
+        if (handInputRef.current.detected && bounds) {
+          const mapped = mapCalibratedCursor(handInputRef.current.x, handInputRef.current.y, bounds);
+          if (mapped) handInputRef.current = { ...handInputRef.current, x: mapped.x, y: mapped.y };
+        }
         if (currentHandCount !== lastHandCountRef.current) {
           lastHandCountRef.current = currentHandCount;
           setHandCount(currentHandCount);
@@ -808,6 +852,15 @@ export default function App() {
                 <div className="metric-row"><span>Frame rate</span><span className="metric-value">{cameraOn ? fps + ' FPS' : '—'}</span></div>
                 <div className="metric-row"><span>Processing</span><span className="metric-value">On-device</span></div>
               </div>
+              {activeExperience.id !== 'shadowstrike' && activeExperience.id !== 'realityscan' && <div className="inspector-section">
+                <span className="field-label">HAND CURSOR CALIBRATION</span>
+                <div className="metric-row"><span>Profile</span><span className="metric-value">{calibrationMessage}</span></div>
+                <p className="inspector-description">Move your hand left, right, up and down while calibration runs. The learned range is stored locally in this browser.</p>
+                <button className="button button-secondary" disabled={!cameraOn || calibratingCursor} onClick={startCursorCalibration}>
+                  <Target size={15} /> {calibratingCursor ? 'Calibrating…' : 'Calibrate hand cursor'}
+                </button>
+                {calibratingCursor && <button className="button button-ghost" onClick={() => { cursorCalibratorRef.current = null; calibratingCursorRef.current = false; setCalibratingCursor(false); setCalibrationMessage('Calibration cancelled'); }}>Cancel calibration</button>}
+              </div>}
               <div className="inspector-section">
                 <span className="field-label">EXPERIENCE MODULES</span>
                 <div className="tag-list">{activeExperience.tags.map((tag) => <span className="feature-tag" key={tag}>{tag}</span>)}</div>
