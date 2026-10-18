@@ -135,7 +135,7 @@ export class AirHandCursorSmoother {
   private y = 0.5;
   private initialized = false;
   private lastAt = 0;
-  constructor(private readonly alpha = 0.30) {}
+  constructor(private readonly alpha = 0.22) {}
   reset(x = 0.5, y = 0.5) {
     this.x = clamp(x, 0, 1); this.y = clamp(y, 0, 1); this.initialized = true;
   }
@@ -146,9 +146,9 @@ export class AirHandCursorSmoother {
     const elapsed = Math.max(1, Math.min(100, now - (this.lastAt || now - 16)));
     this.lastAt = now;
     const delta = Math.hypot(x - this.x, y - this.y);
-    if (delta <= 0.00045) return { x: this.x, y: this.y };
+    if (delta <= 0.0014) return { x: this.x, y: this.y };
     const speed = delta / elapsed * 1000;
-    const targetAlpha = speed > 1.8 || delta > 0.16 ? 0.86 : speed > 0.65 || delta > 0.055 ? 0.58 : this.alpha;
+    const targetAlpha = speed > 1.8 || delta > 0.16 ? 0.72 : speed > 0.65 || delta > 0.055 ? 0.44 : this.alpha;
     const factor = 1 - Math.pow(1 - clamp(targetAlpha, 0.08, 0.78), elapsed / 16.67);
     this.x += (x - this.x) * factor; this.y += (y - this.y) * factor;
     return { x: this.x, y: this.y };
