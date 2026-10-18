@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import type { HandInputRef } from '../vision/types';
+import { SpatialPinchGate } from '../vision/spatialInteraction';
 
 type HoloDeskSceneProps = {
   inputRef: HandInputRef;
@@ -10,6 +11,7 @@ type HoloDeskSceneProps = {
 export default function HoloDeskScene({ inputRef, cameraEnabled }: HoloDeskSceneProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const cameraEnabledRef = useRef(cameraEnabled);
+  const pinchGateRef = useRef(new SpatialPinchGate());
   const [webglUnavailable, setWebglUnavailable] = useState(false);
   const [fallbackOffset, setFallbackOffset] = useState({ x: 0, y: 0 });
   const [fallbackRotation, setFallbackRotation] = useState(0);
@@ -188,7 +190,8 @@ export default function HoloDeskScene({ inputRef, cameraEnabled }: HoloDeskScene
       lastTime = time;
 
       const input = inputRef.current;
-      if (cameraEnabledRef.current && input.detected && input.pinch) {
+      const pinchActive = pinchGateRef.current.update(cameraEnabledRef.current && input.detected, input.pinch, input.timestamp, time);
+      if (pinchActive) {
         // Adaptive low-pass: suppress fingertip jitter when steady, but reduce
         // lag automatically when the hand moves quickly (AirHand-style response).
         if (!hasSmoothedHand) {
@@ -218,7 +221,7 @@ export default function HoloDeskScene({ inputRef, cameraEnabled }: HoloDeskScene
         displayedPinch = true;
         const angleDiff = Math.atan2(Math.sin(input.angle - smoothedAngle), Math.cos(input.angle - smoothedAngle));
         smoothedAngle += angleDiff * (handSpeed > 0.7 ? 0.34 : 0.2);
-      } else if (displayedPinch && (!input.detected || !input.pinch)) {
+      } else if (displayedPinch && !pinchActive) {
         displayedPinch = false;
         hasSmoothedHand = false;
         lastHandSampleAt = 0;
@@ -227,7 +230,7 @@ export default function HoloDeskScene({ inputRef, cameraEnabled }: HoloDeskScene
       if (pointerDragging) {
         target.copy(pointerTarget);
         displayedPinch = true;
-      } else if (!input.detected || !input.pinch) {
+      } else if (!pinchActive) {
         displayedPinch = false;
       }
 
