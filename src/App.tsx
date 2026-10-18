@@ -99,6 +99,10 @@ const poseModelCandidates = [
   'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task',
 ];
 
+const DEFAULT_CURSOR_BOUNDS: AirHandCursorBounds = {
+  minX: 0.08, maxX: 0.92, minY: 0.08, maxY: 0.92,
+};
+
 export default function App() {
   const [active, setActive] = useState<ExperienceId | null>(null);
   const [cameraOn, setCameraOn] = useState(false);
@@ -630,8 +634,8 @@ export default function App() {
             }
           }
         }
-        const bounds = cursorBoundsRef.current;
-        if (handInputRef.current.detected && bounds) {
+        const bounds = cursorBoundsRef.current ?? DEFAULT_CURSOR_BOUNDS;
+        if (handInputRef.current.detected) {
           const mapped = mapCalibratedCursor(handInputRef.current.x, handInputRef.current.y, bounds);
           if (mapped) handInputRef.current = { ...handInputRef.current, x: mapped.x, y: mapped.y };
         }
