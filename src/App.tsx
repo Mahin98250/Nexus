@@ -661,10 +661,10 @@ export default function App() {
             : 'Tracking hiccup · retrying vision engine…');
         } else {
           consecutiveInferenceErrors = 0;
-          if (recognizer || tracker) {
+          if (tracker) {
             const guidance = currentHandCount > 0 ? getAirHandFrameGuidance(latestHandLandmarksRef.current) : '';
             publishLoopStatus(currentHandCount > 0
-              ? (guidance || 'Hand detected · ' + (recognizer ? 'AirHand gesture recognizer' : 'landmark fallback'))
+              ? (guidance || 'Hand detected · ' + 'landmark tracker')
               : 'Tracking ready · place your hand fully in frame');
           } else if (poseTracker) {
             publishLoopStatus('Pose tracking ready · stand inside the frame');
@@ -692,8 +692,6 @@ export default function App() {
       }
       if (sessionId !== cameraSessionRef.current) return;
       handInputRef.current = { ...EMPTY_HAND_INPUT };
-      gestureRecognizerRef.current?.close();
-      gestureRecognizerRef.current = null;
       landmarkerRef.current?.close();
       landmarkerRef.current = null;
       poseLandmarkerRef.current?.close();
