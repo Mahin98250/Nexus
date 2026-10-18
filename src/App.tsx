@@ -493,38 +493,74 @@ export default function App() {
         minTrackingConfidence: 0.45,
       };
       if (trackHands) {
-        // Use the lightweight landmark model directly. GestureRecognizer adds a
-        // second CPU-only classifier graph on many browsers; geometry-based
-        // gesture recognition below is faster and keeps pinch control responsive.
-        let handLandmarker: HandLandmarker | null = null;
-        let handModelError: unknown = null;
-        for (const modelAssetPath of handModelCandidates) {
+        // Prefer the trained GestureRecognizer used by the earlier working build.
+        // If its model is unavailable, use the lightweight landmark-only fallback.
+        const gestureOptions = {
+          runningMode: 'VIDEO' as const,
+          numHands: 2,
+          minHandDetectionConfidence: 0.45,
+          minHandPresenceConfidence: 0.45,
+          minTrackingConfidence: 0.45,
+        };
+        let recognizer: GestureRecognizer | null = null;
+        let gestureModelError: unknown = null;
+        for (const modelAssetPath of gestureModelCandidates) {
           for (const delegate of ['GPU', 'CPU'] as const) {
             try {
-              handLandmarker = await mediaPipeModule.HandLandmarker.createFromOptions(vision, {
-                ...trackingOptions,
+              recognizer = await mediaPipeModule.GestureRecognizer.createFromOptions(vision, {
+                ...gestureOptions,
                 baseOptions: { modelAssetPath, delegate },
               });
               break;
             } catch (error) {
-              handModelError = error;
+              gestureModelError = error;
             }
           }
-          if (handLandmarker) break;
+          if (recognizer) break;
         }
-        if (!handLandmarker) {
-          const details = getRuntimeErrorDetails(handModelError);
-          throw new Error('Hand landmark model failed to load (' +
-            (details.name ? details.name + ': ' : '') +
-            (details.message || 'model unavailable') +
-            '). Check the network/model download and retry.');
+
+        if (recognizer) {
+          if (sessionId !== cameraSessionRef.current) {
+            recognizer.close();
+            stream.getTracks().forEach((track) => track.stop());
+            return;
+          }
+          gestureRecognizerRef.current = recognizer;
+        } else {
+          let fallbackLandmarker: HandLandmarker | null = null;
+          let fallbackError: unknown = gestureModelError;
+          for (const modelAssetPath of handModelCandidates) {
+            for (const delegate of ['GPU', 'CPU'] as const) {
+              try {
+                fallbackLandmarker = await mediaPipeModule.HandLandmarker.createFromOptions(vision, {
+                  ...trackingOptions,
+                  baseOptions: { modelAssetPath, delegate },
+                });
+                break;
+              } catch (error) {
+                fallbackError = error;
+              }
+            }
+            if (fallbackLandmarker) break;
+          }
+          if (!fallbackLandmarker) {
+            const gestureDetails = getRuntimeErrorDetails(gestureModelError);
+            const fallbackDetails = getRuntimeErrorDetails(fallbackError);
+            throw new Error(
+              'Gesture model and landmark fallback failed. Gesture model: ' +
+              (gestureDetails.message || gestureDetails.name || 'unavailable') +
+              '. Landmark model: ' +
+              (fallbackDetails.message || fallbackDetails.name || 'unavailable') +
+              '. Check network/model access and retry.'
+            );
+          }
+          if (sessionId !== cameraSessionRef.current) {
+            fallbackLandmarker.close();
+            stream.getTracks().forEach((track) => track.stop());
+            return;
+          }
+          landmarkerRef.current = fallbackLandmarker;
         }
-        if (sessionId !== cameraSessionRef.current) {
-          handLandmarker.close();
-          stream.getTracks().forEach((track) => track.stop());
-          return;
-        }
-        landmarkerRef.current = handLandmarker;
       }
       if (trackBody) {
         const poseOptions = {
