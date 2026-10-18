@@ -156,7 +156,7 @@ export default function App() {
   useEffect(() => {
     try {
       localStorage.setItem('nexus-theme', theme);
-      const stored = localStorage.getItem('nexus-cursor-bounds');
+      const stored = localStorage.getItem('nexus-cursor-bounds-v2');
       if (stored) {
         const bounds = JSON.parse(stored) as AirHandCursorBounds;
         if (validateCursorBounds(bounds)) cursorBoundsRef.current = bounds;
